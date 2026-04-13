@@ -6,7 +6,7 @@ export const saveToken = (t)       => localStorage.setItem(TOKEN_KEY, t);
 export const clearToken = ()       => localStorage.removeItem(TOKEN_KEY);
 
 const api = axios.create({
-  baseURL: '/api',
+  baseURL: `${import.meta.env.VITE_API_URL ?? ''}/api`,
   timeout: 30000,
 });
 
