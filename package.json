@@ -1,0 +1,12 @@
+{
+  "name": "financeiro",
+  "version": "1.0.0",
+  "description": "Dashboard de controle financeiro pessoal",
+  "scripts": {
+    "install:all": "npm install && cd client && npm install && cd ../server && npm install",
+    "dev:server": "cd server && npm run dev",
+    "dev:client": "cd client && npm run dev",
+    "build": "cd client && npm install && npm run build",
+    "start": "node server/index.js"
+  }
+}

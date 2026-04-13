@@ -1,0 +1,9 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npm install:*)",
+      "Bash(npm --version)",
+      "Bash(npx @mapbox/node-pre-gyp install -C node_modules/better-sqlite3 --fallback-to-build=false)"
+    ]
+  }
+}
