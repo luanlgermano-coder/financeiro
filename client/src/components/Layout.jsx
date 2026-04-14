@@ -12,6 +12,7 @@ const ROUTE_LABELS = {
   '/gastos/barbara':     'Gastos — Bárbara',
   '/dividas/luan':       'Dívidas — Luan',
   '/dividas/barbara':    'Dívidas — Bárbara',
+  '/metas':              'Metas Financeiras',
   '/assinaturas':        'Assinaturas',
   '/whatsapp':           'WhatsApp',
   '/upload':             'Upload Fatura',

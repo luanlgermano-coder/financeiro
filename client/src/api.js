@@ -89,4 +89,11 @@ export const getSettings = () => api.get('/settings');
 export const updateSettings = (data) => api.put('/settings', data);
 export const resetData = () => api.delete('/transactions/all');
 
+// Goals
+export const getGoals = () => api.get('/goals');
+export const createGoal = (data) => api.post('/goals', data);
+export const updateGoal = (id, data) => api.put(`/goals/${id}`, data);
+export const deleteGoal = (id) => api.delete(`/goals/${id}`);
+export const depositGoal = (id, amount) => api.post(`/goals/${id}/deposit`, { amount });
+
 export default api;

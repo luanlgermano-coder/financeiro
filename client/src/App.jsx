@@ -10,6 +10,7 @@ import Assinaturas from './pages/Assinaturas';
 import WhatsApp from './pages/WhatsApp';
 import UploadFatura from './pages/UploadFatura';
 import Configuracoes from './pages/Configuracoes';
+import Metas from './pages/Metas';
 import { getToken, clearToken } from './api';
 
 function PrivateRoute({ children, isAuth }) {
@@ -49,6 +50,7 @@ export default function App() {
                   <Route path="/whatsapp"            element={<WhatsApp />} />
                   <Route path="/upload"              element={<UploadFatura />} />
                   <Route path="/configuracoes"       element={<Configuracoes />} />
+                  <Route path="/metas"               element={<Metas />} />
                   <Route path="/lancamentos"         element={<Navigate to="/" replace />} />
                   <Route path="/gastos"              element={<Navigate to="/gastos/luan" replace />} />
                   <Route path="/dividas"             element={<Navigate to="/dividas/luan" replace />} />

@@ -43,6 +43,16 @@ async function initialize() {
     'ALTER TABLE transactions ADD COLUMN hash TEXT',
     'ALTER TABLE transactions ADD COLUMN owner TEXT',
     'ALTER TABLE debts ADD COLUMN owner TEXT',
+    `CREATE TABLE IF NOT EXISTS goals (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      title TEXT NOT NULL,
+      target_amount REAL NOT NULL,
+      current_amount REAL NOT NULL DEFAULT 0,
+      deadline TEXT NOT NULL,
+      owner TEXT NOT NULL DEFAULT 'casal',
+      color TEXT NOT NULL DEFAULT '#10b981',
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    )`,
   ];
   for (const sql of migrations) {
     try { _db.exec(sql); } catch (_) { /* column already exists — safe to ignore */ }

@@ -5,8 +5,9 @@ import {
 import {
   TrendingUp, TrendingDown, Landmark, Wallet,
   ArrowUpRight, ArrowDownRight, ChevronLeft, ChevronRight,
-  ArrowUp, ArrowDown, AlertTriangle, CheckCircle2, Info, Lightbulb
+  ArrowUp, ArrowDown, AlertTriangle, CheckCircle2, Info, Lightbulb, Target
 } from 'lucide-react';
+import { Link } from 'react-router-dom';
 import { getDashboard } from '../api';
 import { formatCurrency, formatDate, getCurrentMonth, getMonthOptions, originLabel, originColor } from '../utils/formatters';
 
@@ -155,6 +156,38 @@ function buildInsights(data) {
       bg: 'bg-amber-50 border-amber-200',
       text: `Você tem ${formatCurrency(debtTotal)} em dívidas ativas. Parcelas mensais: ${formatCurrency(monthlyDebt)}.`,
     });
+  }
+
+  // 6. Meta mais próxima da conclusão (maior %)
+  const upcomingGoals = data.upcomingGoals || [];
+  if (upcomingGoals.length > 0) {
+    const closest = [...upcomingGoals].sort((a, b) =>
+      (b.current_amount / b.target_amount) - (a.current_amount / a.target_amount)
+    )[0];
+    const pct = closest.target_amount > 0
+      ? Math.round((closest.current_amount / closest.target_amount) * 100)
+      : 0;
+    if (pct > 0) {
+      insights.push({
+        icon: Target,
+        color: 'text-emerald-500',
+        bg: 'bg-emerald-50 border-emerald-200',
+        text: `Você está ${pct}% mais perto de atingir a meta "${closest.title}".`,
+      });
+    }
+
+    // Meta com prazo mais próximo
+    const soonest = upcomingGoals[0];
+    const remaining = soonest.target_amount - soonest.current_amount;
+    const deadlineStr = new Date(soonest.deadline + 'T00:00:00').toLocaleDateString('pt-BR');
+    if (remaining > 0) {
+      insights.push({
+        icon: Target,
+        color: 'text-blue-500',
+        bg: 'bg-blue-50 border-blue-200',
+        text: `Faltam ${formatCurrency(remaining)} para atingir a meta "${soonest.title}" até ${deadlineStr}.`,
+      });
+    }
   }
 
   return insights;
@@ -429,6 +462,55 @@ export default function Overview() {
                       <p className="text-xs text-zinc-500 font-medium">Total em dívidas</p>
                       <p className="text-lg font-bold mt-0.5 text-amber-600">{formatCurrency(s.debtTotal)}</p>
                     </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {/* Metas */}
+      {data.upcomingGoals && data.upcomingGoals.length > 0 && (
+        <div>
+          <div className="flex items-center justify-between mb-3">
+            <h2 className="text-lg font-bold text-zinc-900">Metas</h2>
+            <Link
+              to="/metas"
+              className="text-sm text-emerald-600 hover:text-emerald-700 font-medium transition-colors"
+            >
+              Ver todas →
+            </Link>
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            {data.upcomingGoals.map(goal => {
+              const pct  = goal.target_amount > 0 ? Math.min(100, Math.round((goal.current_amount / goal.target_amount) * 100)) : 0;
+              const today = new Date(); today.setHours(0,0,0,0);
+              const dl  = new Date(goal.deadline + 'T00:00:00');
+              const days = Math.ceil((dl - today) / 86400000);
+              const daysLabel = days < 0 ? `${Math.abs(days)}d em atraso` : days === 0 ? 'Vence hoje' : `${days} dias`;
+              const daysColor = days <= 0 ? 'text-red-500' : days <= 30 ? 'text-amber-500' : 'text-zinc-400';
+              return (
+                <div key={goal.id} className="bg-white rounded-2xl p-4 shadow-sm">
+                  <div className="flex items-center gap-2 mb-3">
+                    <div className="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 text-white" style={{ backgroundColor: goal.color }}>
+                      <Target size={14} />
+                    </div>
+                    <div className="min-w-0">
+                      <p className="text-sm font-semibold text-zinc-800 truncate">{goal.title}</p>
+                      <p className={`text-xs ${daysColor}`}>{daysLabel}</p>
+                    </div>
+                  </div>
+                  <div className="w-full bg-zinc-100 rounded-full h-2 mb-1.5">
+                    <div
+                      className="h-2 rounded-full transition-all duration-700"
+                      style={{ width: `${pct}%`, backgroundColor: goal.color }}
+                    />
+                  </div>
+                  <div className="flex justify-between text-xs text-zinc-500">
+                    <span>{formatCurrency(goal.current_amount)}</span>
+                    <span className="font-medium" style={{ color: goal.color }}>{pct}%</span>
+                    <span>{formatCurrency(goal.target_amount)}</span>
                   </div>
                 </div>
               );

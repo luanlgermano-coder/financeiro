@@ -89,6 +89,14 @@ router.get('/', (req, res) => {
       };
     }
 
+    // Metas mais próximas do prazo (ativas)
+    const upcomingGoals = db.prepare(`
+      SELECT * FROM goals
+      WHERE current_amount < target_amount
+      ORDER BY deadline ASC
+      LIMIT 3
+    `).all();
+
     res.json({
       income, expense,
       debtTotal: debtRow.total,
@@ -101,6 +109,7 @@ router.get('/', (req, res) => {
       prevCategoryBreakdown,
       categoryBreakdown, recentTransactions, monthlyEvolution,
       ownerSummary,
+      upcomingGoals,
     });
   } catch (err) {
     console.error(err);

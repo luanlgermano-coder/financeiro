@@ -3,7 +3,7 @@ import { NavLink } from 'react-router-dom';
 import {
   LayoutDashboard, CreditCard, Repeat2, Landmark,
   MessageCircle, FileUp, TrendingUp, ChevronDown, ChevronRight,
-  User, ArrowDownCircle, Settings, LogOut, X
+  User, ArrowDownCircle, Settings, LogOut, X, Target
 } from 'lucide-react';
 
 // Contexto para fechar o menu ao navegar no mobile
@@ -107,6 +107,7 @@ export default function Sidebar({ isOpen, onClose, onLogout }) {
           </Section>
 
           <Section label="Outros" defaultOpen={false}>
+            <NavItem to="/metas"         icon={Target}        label="Metas" />
             <NavItem to="/assinaturas"   icon={Repeat2}       label="Assinaturas" />
             <NavItem to="/whatsapp"      icon={MessageCircle} label="WhatsApp" />
             <NavItem to="/upload"        icon={FileUp}        label="Upload Fatura" />

@@ -30,6 +30,7 @@ async function start() {
   app.use('/api/webhook',       require('./routes/whatsapp'));
   app.use('/api/upload',        require('./routes/upload'));
   app.use('/api/settings',      require('./routes/settings'));
+  app.use('/api/goals',         require('./routes/goals'));
 
   // Serve frontend estático em produção
   if (process.env.NODE_ENV === 'production') {
