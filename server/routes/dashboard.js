@@ -21,6 +21,21 @@ router.get('/', (req, res) => {
     const totalCommitted = expense + monthlyDebtRow.total + subRow.total;
     const healthPercent  = income > 0 ? Math.min(100, Math.round((totalCommitted / income) * 100)) : 0;
 
+    // Mês anterior (para insights comparativos)
+    const prevDate  = new Date(parseInt(year), parseInt(mon) - 2, 1);
+    const prevY     = prevDate.getFullYear();
+    const prevM     = String(prevDate.getMonth() + 1).padStart(2, '0');
+    const prevStart = `${prevY}-${prevM}-01`;
+    const prevEnd   = `${prevY}-${prevM}-31`;
+    const prevIncomeRow  = db.prepare(`SELECT COALESCE(SUM(amount),0) as total FROM transactions WHERE type='income'  AND date BETWEEN ? AND ?`).get(prevStart, prevEnd);
+    const prevExpenseRow = db.prepare(`SELECT COALESCE(SUM(amount),0) as total FROM transactions WHERE type='expense' AND date BETWEEN ? AND ?`).get(prevStart, prevEnd);
+    const prevCategoryBreakdown = db.prepare(`
+      SELECT c.id, c.name, c.color, COALESCE(SUM(t.amount),0) as total
+      FROM categories c
+      LEFT JOIN transactions t ON t.category_id=c.id AND t.type='expense' AND t.date BETWEEN ? AND ?
+      GROUP BY c.id HAVING total > 0 ORDER BY total DESC
+    `).all(prevStart, prevEnd);
+
     // Gastos por categoria
     const categoryBreakdown = db.prepare(`
       SELECT c.id, c.name, c.color, c.icon, COALESCE(SUM(t.amount),0) as total
@@ -60,14 +75,17 @@ router.get('/', (req, res) => {
     // Resumo individual por owner
     const ownerSummary = {};
     for (const owner of ['luan', 'barbara']) {
-      const oIncome  = db.prepare(`SELECT COALESCE(SUM(amount),0) as t FROM transactions WHERE owner=? AND type='income'  AND date BETWEEN ? AND ?`).get(owner, startDate, endDate);
-      const oExpense = db.prepare(`SELECT COALESCE(SUM(amount),0) as t FROM transactions WHERE owner=? AND type='expense' AND date BETWEEN ? AND ?`).get(owner, startDate, endDate);
-      const oDebt    = db.prepare(`SELECT COALESCE(SUM(total_amount - paid_amount),0) as t FROM debts WHERE owner=? AND total_amount > paid_amount`).get(owner);
+      const oIncome      = db.prepare(`SELECT COALESCE(SUM(amount),0) as t FROM transactions WHERE owner=? AND type='income'  AND date BETWEEN ? AND ?`).get(owner, startDate, endDate);
+      const oExpense     = db.prepare(`SELECT COALESCE(SUM(amount),0) as t FROM transactions WHERE owner=? AND type='expense' AND date BETWEEN ? AND ?`).get(owner, startDate, endDate);
+      const oDebt        = db.prepare(`SELECT COALESCE(SUM(total_amount - paid_amount),0) as t FROM debts WHERE owner=? AND total_amount > paid_amount`).get(owner);
+      const oPrevIncome  = db.prepare(`SELECT COALESCE(SUM(amount),0) as t FROM transactions WHERE owner=? AND type='income'  AND date BETWEEN ? AND ?`).get(owner, prevStart, prevEnd);
+      const oPrevExpense = db.prepare(`SELECT COALESCE(SUM(amount),0) as t FROM transactions WHERE owner=? AND type='expense' AND date BETWEEN ? AND ?`).get(owner, prevStart, prevEnd);
       ownerSummary[owner] = {
-        income:    oIncome.t,
-        expense:   oExpense.t,
-        balance:   oIncome.t - oExpense.t,
-        debtTotal: oDebt.t,
+        income:      oIncome.t,
+        expense:     oExpense.t,
+        balance:     oIncome.t - oExpense.t,
+        prevBalance: oPrevIncome.t - oPrevExpense.t,
+        debtTotal:   oDebt.t,
       };
     }
 
@@ -78,6 +96,9 @@ router.get('/', (req, res) => {
       subscriptionTotal: subRow.total,
       surplus: income - totalCommitted,
       healthPercent,
+      prevMonthIncome:  prevIncomeRow.total,
+      prevMonthExpense: prevExpenseRow.total,
+      prevCategoryBreakdown,
       categoryBreakdown, recentTransactions, monthlyEvolution,
       ownerSummary,
     });

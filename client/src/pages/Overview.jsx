@@ -5,7 +5,7 @@ import {
 import {
   TrendingUp, TrendingDown, Landmark, Wallet,
   ArrowUpRight, ArrowDownRight, ChevronLeft, ChevronRight,
-  ArrowUp, ArrowDown
+  ArrowUp, ArrowDown, AlertTriangle, CheckCircle2, Info, Lightbulb
 } from 'lucide-react';
 import { getDashboard } from '../api';
 import { formatCurrency, formatDate, getCurrentMonth, getMonthOptions, originLabel, originColor } from '../utils/formatters';
@@ -18,7 +18,7 @@ const StatCard = ({ label, value, icon: Icon, color, sub }) => (
         <p className="text-2xl font-bold text-zinc-900 mt-1">{formatCurrency(value)}</p>
         {sub && <p className="text-xs text-zinc-400 mt-1">{sub}</p>}
       </div>
-      <div className={`p-2.5 rounded-xl ${color.replace('border-', 'bg-').replace('-500', '-100')}`}>
+      <div className={`p-2.5 rounded-xl ${color.replace('border-', 'bg-').replace('-500', '-100').replace('-400', '-100')}`}>
         <Icon size={20} className={color.replace('border-', 'text-')} />
       </div>
     </div>
@@ -60,6 +60,114 @@ const CustomTooltip = ({ active, payload, label }) => {
   return null;
 };
 
+function buildInsights(data) {
+  const insights = [];
+  const {
+    income, expense, surplus,
+    prevMonthIncome, prevMonthExpense,
+    categoryBreakdown, prevCategoryBreakdown,
+    debtTotal, monthlyDebt,
+  } = data;
+
+  const prevSurplus = prevMonthIncome - prevMonthExpense;
+
+  // 1. Comparação de gastos com mês anterior
+  if (prevMonthExpense > 0) {
+    const diff = expense - prevMonthExpense;
+    const pct  = Math.round(Math.abs(diff / prevMonthExpense) * 100);
+    if (diff > 0) {
+      insights.push({
+        icon: TrendingUp,
+        color: 'text-red-500',
+        bg: 'bg-red-50 border-red-200',
+        text: `Seus gastos aumentaram ${pct}% em relação ao mês anterior (+${formatCurrency(diff)}).`,
+      });
+    } else if (diff < 0) {
+      insights.push({
+        icon: TrendingDown,
+        color: 'text-emerald-500',
+        bg: 'bg-emerald-50 border-emerald-200',
+        text: `Seus gastos caíram ${pct}% em relação ao mês anterior (${formatCurrency(diff)}).`,
+      });
+    }
+  }
+
+  // 2. Categoria que mais cresceu
+  if (prevCategoryBreakdown && prevCategoryBreakdown.length > 0 && categoryBreakdown.length > 0) {
+    const prevMap = Object.fromEntries(prevCategoryBreakdown.map(c => [c.id, c.total]));
+    let topCat = null, topGrowth = -Infinity;
+    for (const cat of categoryBreakdown) {
+      const prev = prevMap[cat.id] || 0;
+      if (prev > 0) {
+        const growth = (cat.total - prev) / prev;
+        if (growth > topGrowth && growth > 0.1) {
+          topGrowth = growth;
+          topCat = { ...cat, prev };
+        }
+      }
+    }
+    if (topCat) {
+      const pct = Math.round(topGrowth * 100);
+      insights.push({
+        icon: AlertTriangle,
+        color: 'text-amber-500',
+        bg: 'bg-amber-50 border-amber-200',
+        text: `A categoria "${topCat.name}" cresceu ${pct}% vs. mês anterior (${formatCurrency(topCat.prev)} → ${formatCurrency(topCat.total)}).`,
+      });
+    }
+  }
+
+  // 3. Tendência da sobra
+  if (prevMonthIncome > 0 || prevSurplus !== 0) {
+    const diff = surplus - prevSurplus;
+    if (Math.abs(diff) > 10) {
+      insights.push({
+        icon: diff >= 0 ? CheckCircle2 : Info,
+        color: diff >= 0 ? 'text-emerald-500' : 'text-zinc-500',
+        bg: diff >= 0 ? 'bg-emerald-50 border-emerald-200' : 'bg-zinc-50 border-zinc-200',
+        text: diff >= 0
+          ? `Sua sobra melhorou ${formatCurrency(diff)} em relação ao mês anterior.`
+          : `Sua sobra piorou ${formatCurrency(Math.abs(diff))} em relação ao mês anterior.`,
+      });
+    }
+  }
+
+  // 4. Alerta de categoria > 30% da renda
+  if (income > 0) {
+    for (const cat of categoryBreakdown) {
+      const pct = Math.round((cat.total / income) * 100);
+      if (pct >= 30) {
+        insights.push({
+          icon: AlertTriangle,
+          color: 'text-red-500',
+          bg: 'bg-red-50 border-red-200',
+          text: `Atenção: "${cat.name}" representa ${pct}% da sua renda (${formatCurrency(cat.total)}).`,
+        });
+      }
+    }
+  }
+
+  // 5. Progresso de dívidas
+  if (debtTotal > 0) {
+    insights.push({
+      icon: Landmark,
+      color: 'text-amber-500',
+      bg: 'bg-amber-50 border-amber-200',
+      text: `Você tem ${formatCurrency(debtTotal)} em dívidas ativas. Parcelas mensais: ${formatCurrency(monthlyDebt)}.`,
+    });
+  }
+
+  return insights;
+}
+
+function healthPhrase(pct) {
+  if (pct < 40) return 'Suas finanças estão excelentes! Continue mantendo esse controle.';
+  if (pct < 60) return 'Boa situação financeira. Você tem uma margem confortável.';
+  if (pct < 80) return 'Atenção: mais da metade da renda já está comprometida.';
+  if (pct < 100) return 'Situação crítica. Revise seus gastos urgentemente.';
+  return 'Alerta: você está gastando mais do que ganha!';
+}
+
 export default function Overview() {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -91,6 +199,7 @@ export default function Overview() {
   if (!data) return <p className="text-zinc-500">Erro ao carregar dados.</p>;
 
   const maxCategory = data.categoryBreakdown.length > 0 ? Math.max(...data.categoryBreakdown.map(c => c.total)) : 1;
+  const insights = buildInsights(data);
 
   return (
     <div className="space-y-6">
@@ -183,7 +292,33 @@ export default function Overview() {
           <span>50%</span>
           <span>100%</span>
         </div>
+        <p className={`text-sm font-medium mt-3 ${
+          data.healthPercent < 60 ? 'text-emerald-600' : data.healthPercent < 80 ? 'text-amber-600' : 'text-red-600'
+        }`}>
+          {healthPhrase(data.healthPercent)}
+        </p>
       </div>
+
+      {/* Insights do mês */}
+      {insights.length > 0 && (
+        <div className="bg-white rounded-2xl p-5 shadow-sm">
+          <div className="flex items-center gap-2 mb-4">
+            <Lightbulb size={18} className="text-amber-400" />
+            <h3 className="font-semibold text-zinc-900">Insights do Mês</h3>
+          </div>
+          <div className="space-y-2.5">
+            {insights.map((ins, i) => {
+              const Icon = ins.icon;
+              return (
+                <div key={i} className={`flex items-start gap-3 border rounded-xl px-4 py-3 ${ins.bg}`}>
+                  <Icon size={16} className={`${ins.color} flex-shrink-0 mt-0.5`} />
+                  <p className="text-sm text-zinc-700">{ins.text}</p>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Categorias */}
@@ -242,16 +377,25 @@ export default function Overview() {
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             {[
               { key: 'luan',    label: 'Luan',    accent: '#3b82f6', border: 'border-blue-500',  text: 'text-blue-600',  bg: 'bg-blue-50'  },
-              { key: 'barbara', label: 'Bárbara', accent: '#ec4899', border: 'border-pink-500', text: 'text-pink-600', bg: 'bg-pink-50' },
+              { key: 'barbara', label: 'Bárbara', accent: '#ec4899', border: 'border-pink-500',  text: 'text-pink-600',  bg: 'bg-pink-50'  },
             ].map(({ key, label, accent, border, text, bg }) => {
-              const s = data.ownerSummary[key] || { income: 0, expense: 0, balance: 0, debtTotal: 0 };
+              const s = data.ownerSummary[key] || { income: 0, expense: 0, balance: 0, prevBalance: 0, debtTotal: 0 };
+              const balanceDiff = s.balance - (s.prevBalance ?? s.balance);
+              const incomeShare = data.income > 0 ? Math.round((s.income / data.income) * 100) : 0;
               return (
                 <div key={key} className={`bg-white rounded-2xl p-5 shadow-sm border-l-4 ${border}`}>
-                  <div className="flex items-center gap-2 mb-4">
-                    <div className="w-7 h-7 rounded-full flex items-center justify-center text-white text-xs font-bold" style={{ backgroundColor: accent }}>
-                      {label[0]}
+                  <div className="flex items-center justify-between mb-4">
+                    <div className="flex items-center gap-2">
+                      <div className="w-7 h-7 rounded-full flex items-center justify-center text-white text-xs font-bold" style={{ backgroundColor: accent }}>
+                        {label[0]}
+                      </div>
+                      <h3 className="font-semibold text-zinc-900">{label}</h3>
                     </div>
-                    <h3 className="font-semibold text-zinc-900">{label}</h3>
+                    {incomeShare > 0 && (
+                      <span className="text-xs font-medium text-zinc-500 bg-zinc-100 px-2 py-0.5 rounded-full">
+                        {incomeShare}% da renda total
+                      </span>
+                    )}
                   </div>
                   <div className="grid grid-cols-2 gap-3">
                     <div className={`${bg} rounded-xl p-3`}>
@@ -268,8 +412,18 @@ export default function Overview() {
                         {s.balance >= 0
                           ? <ArrowUp size={14} className="text-emerald-600" />
                           : <ArrowDown size={14} className="text-red-500" />}
-                        <p className={`text-lg font-bold ${s.balance >= 0 ? 'text-emerald-600' : 'text-red-500'}`}>{formatCurrency(Math.abs(s.balance))}</p>
+                        <p className={`text-lg font-bold ${s.balance >= 0 ? 'text-emerald-600' : 'text-red-500'}`}>
+                          {formatCurrency(Math.abs(s.balance))}
+                        </p>
                       </div>
+                      {Math.abs(balanceDiff) > 1 && (
+                        <div className={`flex items-center gap-0.5 mt-1 ${balanceDiff >= 0 ? 'text-emerald-500' : 'text-red-400'}`}>
+                          {balanceDiff >= 0
+                            ? <ArrowUpRight size={11} />
+                            : <ArrowDownRight size={11} />}
+                          <span className="text-xs">{formatCurrency(Math.abs(balanceDiff))} vs. mês anterior</span>
+                        </div>
+                      )}
                     </div>
                     <div className="bg-amber-50 rounded-xl p-3">
                       <p className="text-xs text-zinc-500 font-medium">Total em dívidas</p>

@@ -86,5 +86,5 @@ INSERT OR IGNORE INTO cards (id, name, color) VALUES
 
 -- Configurações padrão
 INSERT OR IGNORE INTO settings (key, value) VALUES
-  ('user_name', 'Usuário'),
-  ('monthly_income', '5000');
+  ('user_name', 'Luan Germano'),
+  ('spouse_name', 'Bárbara');

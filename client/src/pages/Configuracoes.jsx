@@ -3,7 +3,7 @@ import { Save, Trash2, AlertTriangle, CheckCircle2 } from 'lucide-react';
 import { getSettings, updateSettings, resetData } from '../api';
 
 export default function Configuracoes() {
-  const [form, setForm]       = useState({ user_name: '' });
+  const [form, setForm]       = useState({ user_name: '', spouse_name: '' });
   const [saving, setSaving]   = useState(false);
   const [resetting, setResetting] = useState(false);
   const [success, setSuccess] = useState('');
@@ -11,7 +11,10 @@ export default function Configuracoes() {
 
   useEffect(() => {
     getSettings().then(r => {
-      setForm({ user_name: r.data.user_name || '' });
+      setForm({
+        user_name:    r.data.user_name    || '',
+        spouse_name:  r.data.spouse_name  || '',
+      });
     }).catch(() => {});
   }, []);
 
@@ -82,6 +85,17 @@ export default function Configuracoes() {
             value={form.user_name}
             onChange={e => setForm(f => ({ ...f, user_name: e.target.value }))}
             placeholder="Seu nome"
+            className="w-full px-3 py-2 border border-zinc-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"
+          />
+        </div>
+
+        <div>
+          <label className="block text-sm font-medium text-zinc-700 mb-1">Nome do cônjuge</label>
+          <input
+            type="text"
+            value={form.spouse_name}
+            onChange={e => setForm(f => ({ ...f, spouse_name: e.target.value }))}
+            placeholder="Nome do cônjuge"
             className="w-full px-3 py-2 border border-zinc-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"
           />
         </div>
