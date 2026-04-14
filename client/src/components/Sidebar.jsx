@@ -50,7 +50,7 @@ const Section = ({ label, children, defaultOpen = true }) => {
 };
 
 export default function Sidebar({ isOpen, onClose, onLogout }) {
-  const [userName, setUserName] = useState('Usuário');
+  const [userName, setUserName] = useState('Luan e Bárbara');
 
   useEffect(() => {
     getSettings().then(r => {
