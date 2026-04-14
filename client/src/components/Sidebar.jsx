@@ -1,11 +1,10 @@
-import React, { useState, useEffect, createContext, useContext } from 'react';
+import React, { createContext, useContext, useState } from 'react';
 import { NavLink } from 'react-router-dom';
 import {
   LayoutDashboard, CreditCard, Repeat2, Landmark,
   MessageCircle, FileUp, TrendingUp, ChevronDown, ChevronRight,
   User, ArrowDownCircle, Settings, LogOut, X
 } from 'lucide-react';
-import { getSettings } from '../api';
 
 // Contexto para fechar o menu ao navegar no mobile
 const CloseCtx = createContext(null);
@@ -50,14 +49,6 @@ const Section = ({ label, children, defaultOpen = true }) => {
 };
 
 export default function Sidebar({ isOpen, onClose, onLogout }) {
-  const [userName, setUserName] = useState('Luan e Bárbara');
-
-  useEffect(() => {
-    getSettings().then(r => {
-      if (r.data.user_name) setUserName(r.data.user_name);
-    }).catch(() => {});
-  }, []);
-
   return (
     <CloseCtx.Provider value={onClose}>
       <aside
@@ -91,7 +82,7 @@ export default function Sidebar({ isOpen, onClose, onLogout }) {
           <div className="w-8 h-8 bg-zinc-700 rounded-full flex items-center justify-center flex-shrink-0">
             <User size={16} className="text-zinc-300" />
           </div>
-          <span className="text-zinc-300 text-sm font-medium truncate">{userName}</span>
+          <span className="text-zinc-300 text-sm font-medium truncate">Luan &amp; Bárbara</span>
         </div>
 
         {/* Navigation */}
