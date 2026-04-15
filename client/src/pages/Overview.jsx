@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import {
-  BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend
+  BarChart, Bar, LineChart, Line,
+  XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend
 } from 'recharts';
 import {
   TrendingUp, TrendingDown, Landmark, Wallet,
@@ -467,6 +468,22 @@ export default function Overview() {
               );
             })}
           </div>
+        </div>
+      )}
+
+      {/* Evolução consolidada das dívidas */}
+      {data.debtEvolution && data.debtEvolution.some(p => p.balance > 0) && (
+        <div className="bg-white rounded-2xl p-5 shadow-sm">
+          <h3 className="font-semibold text-zinc-900 mb-6">Evolução das Dívidas — Últimos 6 Meses</h3>
+          <ResponsiveContainer width="100%" height={200}>
+            <LineChart data={data.debtEvolution} margin={{ top: 4, right: 8, left: 0, bottom: 0 }}>
+              <CartesianGrid strokeDasharray="3 3" stroke="#f4f4f5" />
+              <XAxis dataKey="month" tick={{ fontSize: 12, fill: '#71717a' }} />
+              <YAxis tick={{ fontSize: 11, fill: '#71717a' }} tickFormatter={v => `R$${(v/1000).toFixed(0)}k`} width={52} />
+              <Tooltip formatter={v => [formatCurrency(v), 'Saldo devedor']} contentStyle={{ borderRadius: 8, border: '1px solid #e4e4e7', fontSize: 12 }} />
+              <Line type="monotone" dataKey="balance" stroke="#f59e0b" strokeWidth={2.5} dot={{ r: 4, fill: '#f59e0b' }} activeDot={{ r: 6 }} />
+            </LineChart>
+          </ResponsiveContainer>
         </div>
       )}
 

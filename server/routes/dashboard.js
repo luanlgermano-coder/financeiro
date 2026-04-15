@@ -89,6 +89,25 @@ router.get('/', (req, res) => {
       };
     }
 
+    // Evolução do total de dívidas dos últimos 6 meses
+    // Estratégia: saldo atual + pagamentos feitos depois de cada ponto no tempo
+    const currentDebtTotal = debtRow.total;
+    const debtEvolution = [];
+    for (let i = 5; i >= 0; i--) {
+      const d = new Date(parseInt(year), parseInt(mon) - 1 - i, 1);
+      const y = d.getFullYear();
+      const m = String(d.getMonth() + 1).padStart(2, '0');
+      const monthEnd = `${y}-${m}-31`;
+      const monthLabel = d.toLocaleString('pt-BR', { month: 'short' });
+      const paidAfterRow = db.prepare(
+        `SELECT COALESCE(SUM(amount),0) as total FROM debt_payments WHERE date > ?`
+      ).get(monthEnd);
+      debtEvolution.push({
+        month: monthLabel,
+        balance: Math.max(0, currentDebtTotal + paidAfterRow.total),
+      });
+    }
+
     // Metas mais próximas do prazo (ativas)
     const upcomingGoals = db.prepare(`
       SELECT * FROM goals
@@ -110,6 +129,7 @@ router.get('/', (req, res) => {
       categoryBreakdown, recentTransactions, monthlyEvolution,
       ownerSummary,
       upcomingGoals,
+      debtEvolution,
     });
   } catch (err) {
     console.error(err);

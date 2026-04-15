@@ -67,6 +67,7 @@ export const createDebt = (data) => api.post('/debts', data);
 export const updateDebt = (id, data) => api.put(`/debts/${id}`, data);
 export const deleteDebt = (id) => api.delete(`/debts/${id}`);
 export const registerDebtPayment = (id, amount) => api.post(`/debts/${id}/payment`, { amount });
+export const getDebtPayments = (id) => api.get(`/debts/${id}/payments`);
 
 // WhatsApp
 export const getWhatsAppLogs = () => api.get('/webhook/whatsapp/logs');

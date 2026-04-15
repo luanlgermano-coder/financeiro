@@ -2,8 +2,9 @@ const express = require('express');
 const router = express.Router();
 const db = require('../db/database');
 const { GoogleGenerativeAI } = require('@google/generative-ai');
-const axios = require('axios');
 const { makeHash, findDuplicate } = require('../utils/duplicates');
+const { sendMessage } = require('../services/whatsapp.service');
+const { checkAndSendAlerts } = require('../services/alerts.service');
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -136,18 +137,8 @@ async function parseMessage(text) {
   return { ...fromGemini, _source: 'gemini' };
 }
 
-async function sendWhatsAppReply(to, message) {
-  if (!process.env.EVOLUTION_API_URL || !process.env.EVOLUTION_API_KEY) return;
-  try {
-    await axios.post(
-      `${process.env.EVOLUTION_API_URL}/message/sendText/${process.env.EVOLUTION_INSTANCE}`,
-      { number: to, textMessage: { text: message } },
-      { headers: { apikey: process.env.EVOLUTION_API_KEY } }
-    );
-  } catch (err) {
-    console.error('Erro ao enviar resposta WhatsApp:', err.message);
-  }
-}
+// Alias local para manter compatibilidade com o restante do arquivo
+const sendWhatsAppReply = (to, message) => sendMessage(to, message);
 
 // ---------------------------------------------------------------------------
 // Identifica o owner pelo número do remetente
@@ -305,6 +296,14 @@ router.post('/whatsapp', async (req, res) => {
           `🏷️ ${parsed.category || 'Outros'}`;
 
         if (senderNumber) await sendWhatsAppReply(senderNumber, replyMsg);
+
+        // Verifica e envia alertas automáticos (fire-and-forget, não bloqueia resposta)
+        if (owner && parsed.type === 'expense') {
+          const ownerPhone = owner === 'luan' ? process.env.LUAN_PHONE : process.env.BARBARA_PHONE;
+          checkAndSendAlerts(db, owner, ownerPhone).catch(e =>
+            console.error('[alerts] Erro ao verificar alertas:', e.message)
+          );
+        }
       }
 
     } catch (err) {

@@ -53,6 +53,13 @@ async function initialize() {
       color TEXT NOT NULL DEFAULT '#10b981',
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP
     )`,
+    `CREATE TABLE IF NOT EXISTS debt_payments (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      debt_id INTEGER NOT NULL,
+      amount REAL NOT NULL,
+      date TEXT NOT NULL,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    )`,
   ];
   for (const sql of migrations) {
     try { _db.exec(sql); } catch (_) { /* column already exists — safe to ignore */ }
