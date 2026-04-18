@@ -156,29 +156,85 @@ function resolveOwner(senderNumber) {
 }
 
 // ---------------------------------------------------------------------------
+// GET /api/webhook/whatsapp — validação da Evolution API (retorna 200)
+// ---------------------------------------------------------------------------
+router.get('/whatsapp', (_req, res) => {
+  res.json({ status: 'ok', service: 'financeiro-webhook' });
+});
+
+// ---------------------------------------------------------------------------
 // POST /api/webhook/whatsapp
 // ---------------------------------------------------------------------------
 router.post('/whatsapp', async (req, res) => {
   try {
     const body = req.body;
-    const messageData = body?.data?.message || body?.message;
+
+    // ── Debug: loga o payload bruto para facilitar diagnóstico ──────────────
+    console.log('[WhatsApp webhook] Payload recebido:', JSON.stringify(body, null, 2));
+
+    // ── Filtra eventos que não são mensagens recebidas ───────────────────────
+    // Evolution API envia outros eventos (messages.update, presence.update…)
+    const event = body?.event;
+    if (event && event !== 'messages.upsert') {
+      console.log(`[WhatsApp webhook] Evento ignorado: ${event}`);
+      return res.json({ status: 'ignored', reason: `Evento não processado: ${event}` });
+    }
+
+    // ── Extrai dados da mensagem (Evolution API v1 e v2) ────────────────────
+    //
+    // Formato Evolution API:
+    //   body.data.key.remoteJid   → número do remetente
+    //   body.data.key.fromMe      → true se enviado pelo próprio bot
+    //   body.data.message.conversation          → texto simples
+    //   body.data.message.extendedTextMessage.text → texto com formatação/reply
+    //   body.data.pushName        → nome exibido do contato
+    //
+    const data        = body?.data || body;
+    const key         = data?.key  || {};
+    const messageData = data?.message || body?.message;
+    const fromMe      = key?.fromMe ?? data?.fromMe ?? false;
+
     let messageText =
       messageData?.conversation ||
       messageData?.extendedTextMessage?.text ||
-      body?.data?.messageText ||
-      body?.text;
+      messageData?.imageMessage?.caption ||
+      data?.messageText ||
+      body?.text ||
+      null;
 
+    // remoteJid pode vir como "5519...@s.whatsapp.net" ou só o número
     const senderNumber =
-      body?.data?.key?.remoteJid ||
-      body?.sender ||
-      body?.from;
+      key?.remoteJid ||
+      data?.remoteJid ||
+      body?.sender   ||
+      body?.from     ||
+      null;
 
+    const pushName = data?.pushName || data?.name || null;
+
+    // ── Ignora mensagens enviadas pelo próprio bot (evita loop) ─────────────
+    if (fromMe) {
+      console.log('[WhatsApp webhook] Ignorado: mensagem enviada pelo bot (fromMe=true)');
+      return res.json({ status: 'ignored', reason: 'fromMe' });
+    }
+
+    // ── Ignora mensagens de grupos (@g.us) ──────────────────────────────────
+    if (senderNumber && senderNumber.endsWith('@g.us')) {
+      console.log(`[WhatsApp webhook] Ignorado: mensagem de grupo ${senderNumber}`);
+      return res.json({ status: 'ignored', reason: 'Grupo ignorado' });
+    }
+
+    // ── Ignora se não há texto ───────────────────────────────────────────────
     if (!messageText || !messageText.trim()) {
+      console.log('[WhatsApp webhook] Ignorado: sem texto (mídia, sticker, áudio…)');
       return res.json({ status: 'ignored', reason: 'Sem texto na mensagem' });
     }
 
+    console.log(`[WhatsApp webhook] Mensagem de ${senderNumber} (${pushName || 'sem nome'}): "${messageText}"`);
+
     // Identifica owner pelo telefone
     const owner = resolveOwner(senderNumber);
+    console.log(`[WhatsApp webhook] Owner identificado: ${owner || 'desconhecido'} (${senderNumber}`);
 
     // Número desconhecido → pede identificação e ignora
     if (!owner && (process.env.LUAN_PHONE || process.env.BARBARA_PHONE)) {
@@ -331,7 +387,7 @@ router.post('/whatsapp', async (req, res) => {
 });
 
 // GET /api/webhook/whatsapp/logs
-router.get('/whatsapp/logs', (req, res) => {
+router.get('/whatsapp/logs', (_req, res) => {
   try {
     const row = db.prepare(`SELECT value FROM settings WHERE key='whatsapp_logs'`).get();
     res.json(row ? JSON.parse(row.value) : []);
@@ -339,7 +395,7 @@ router.get('/whatsapp/logs', (req, res) => {
 });
 
 // GET /api/webhook/whatsapp/stats
-router.get('/whatsapp/stats', (req, res) => {
+router.get('/whatsapp/stats', (_req, res) => {
   try {
     const today = new Date().toISOString().slice(0, 10);
     const monthStart = today.slice(0, 7) + '-01';
