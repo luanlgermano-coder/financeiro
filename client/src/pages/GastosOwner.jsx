@@ -202,7 +202,9 @@ function GastoForm({ categories, cards, owner, initial, onSaved, onCancel, theme
   );
 }
 
-export default function GastosOwner({ owner }) {
+export default function GastosOwner({ owner: ownerProp = 'luan' }) {
+  const [activeOwner, setActiveOwner] = useState(ownerProp);
+  const owner = activeOwner;
   const theme  = THEME[owner];
   const label  = LABEL[owner];
   const [transactions, setTransactions] = useState([]);
@@ -213,6 +215,9 @@ export default function GastosOwner({ owner }) {
   const months   = getMonthOptions(12);
   const [monthIdx, setMonthIdx] = useState(0);
   const currentMonth = months[monthIdx].value;
+
+  // Sincroniza aba quando a prop mudar (troca de rota /gastos/luan ↔ /gastos/barbara)
+  useEffect(() => { setActiveOwner(ownerProp); }, [ownerProp]);
 
   const load = useCallback(() => {
     setLoading(true);
@@ -251,7 +256,7 @@ export default function GastosOwner({ owner }) {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-zinc-900">Gastos — {label}</h1>
+          <h1 className="text-2xl font-bold text-zinc-900">Gastos</h1>
           <p className="text-zinc-500 text-sm mt-0.5">Despesas e saídas</p>
         </div>
         <div className="flex items-center gap-2 bg-white border border-zinc-200 rounded-xl px-3 py-2 shadow-sm">
@@ -259,6 +264,27 @@ export default function GastosOwner({ owner }) {
           <span className="text-sm font-semibold text-zinc-700 min-w-[140px] text-center capitalize">{months[monthIdx].label}</span>
           <button onClick={() => setMonthIdx(i => Math.max(i - 1, 0))} disabled={monthIdx === 0} className="p-1 rounded-lg hover:bg-zinc-100 text-zinc-500 disabled:opacity-30"><ChevronRight size={16} /></button>
         </div>
+      </div>
+
+      {/* Abas Luan / Bárbara */}
+      <div className="flex gap-1 bg-zinc-100 p-1 rounded-xl w-fit">
+        {[
+          { key: 'luan',    label: 'Luan',    accent: '#3b82f6' },
+          { key: 'barbara', label: 'Bárbara', accent: '#ec4899' },
+        ].map(tab => (
+          <button
+            key={tab.key}
+            onClick={() => setActiveOwner(tab.key)}
+            className={`px-5 py-1.5 rounded-lg text-sm font-semibold transition-all ${
+              activeOwner === tab.key
+                ? 'bg-white shadow-sm text-zinc-900'
+                : 'text-zinc-500 hover:text-zinc-700'
+            }`}
+            style={activeOwner === tab.key ? { color: tab.accent } : {}}
+          >
+            {tab.label}
+          </button>
+        ))}
       </div>
 
       {/* Stats */}

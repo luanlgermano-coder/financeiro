@@ -224,22 +224,12 @@ router.post('/whatsapp', async (req, res) => {
       return res.json({ status: 'ignored', reason: 'Sem texto na mensagem' });
     }
 
-    console.log(`[WhatsApp webhook] Mensagem de ${senderNumber} (${pushName || 'sem nome'}): "${messageText}"`);
+    console.log(`[WhatsApp webhook] Mensagem de ${senderNumber} (${pushName || 'sem nome'}) fromMe=${fromMe}: "${messageText}"`);
 
-    // Identifica owner pelo telefone
-    const owner = resolveOwner(senderNumber);
-    console.log(`[WhatsApp webhook] Owner identificado: ${owner || 'desconhecido'} (${senderNumber}`);
-
-    // Número desconhecido → pede identificação e ignora
-    if (!owner && (process.env.LUAN_PHONE || process.env.BARBARA_PHONE)) {
-      if (senderNumber) {
-        await sendWhatsAppReply(
-          senderNumber,
-          '❓ Número não identificado. Por favor, configure seu número no sistema para usar o registro via WhatsApp.'
-        );
-      }
-      return res.json({ status: 'ignored', reason: 'Número não identificado' });
-    }
+    // fromMe=true → mensagem enviada pelo próprio número (Luan)
+    // fromMe=false → mensagem recebida de outro número (Bárbara)
+    const owner = fromMe ? 'luan' : 'barbara';
+    console.log(`[WhatsApp webhook] Owner definido: ${owner} (fromMe=${fromMe})`);
 
     // Prefixo CONFIRMAR: bypass de duplicata
     const FORCE_PREFIX = /^CONFIRMAR\s+/i;
