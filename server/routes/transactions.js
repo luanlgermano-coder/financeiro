@@ -143,6 +143,21 @@ router.put('/:id', (req, res) => {
   }
 });
 
+// DELETE /api/transactions/month — apaga transactions do mês atual
+router.delete('/month', (req, res) => {
+  try {
+    const month = new Date().toISOString().slice(0, 7);
+    const start = `${month}-01`;
+    const end   = `${month}-31`;
+    const result = db.prepare(`DELETE FROM transactions WHERE date BETWEEN ? AND ?`).run(start, end);
+    db._persist();
+    res.json({ ok: true, deleted: result.changes });
+  } catch (err) {
+    console.error('reset-month error:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // DELETE /api/transactions/all — apaga todas as transactions, debts e subscriptions
 // (reset de dados de teste). Preserva categories e cards.
 router.delete('/all', (req, res) => {

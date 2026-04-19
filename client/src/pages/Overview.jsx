@@ -6,7 +6,7 @@ import {
 import {
   TrendingUp, TrendingDown, Landmark, Wallet,
   ArrowUpRight, ArrowDownRight, ChevronLeft, ChevronRight,
-  ArrowUp, ArrowDown, AlertTriangle, CheckCircle2, Info, Lightbulb, Target
+  ArrowUp, ArrowDown, AlertTriangle, CheckCircle2, Info, Lightbulb, Target, CreditCard
 } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { getDashboard } from '../api';
@@ -532,6 +532,66 @@ export default function Overview() {
                 </div>
               );
             })}
+          </div>
+        </div>
+      )}
+
+      {/* Compromissos Futuros — parcelas ativas */}
+      {data.installmentSummary && data.installmentSummary.length > 0 && (
+        <div className="bg-white rounded-2xl p-5 shadow-sm">
+          <div className="flex items-center justify-between mb-4">
+            <div className="flex items-center gap-2">
+              <CreditCard size={18} className="text-violet-500" />
+              <h3 className="font-semibold text-zinc-900">Compromissos Futuros</h3>
+            </div>
+            <span className="text-xs text-zinc-500 bg-zinc-100 px-2.5 py-1 rounded-full">
+              {data.installmentSummary.length} compra{data.installmentSummary.length !== 1 ? 's' : ''} ativa{data.installmentSummary.length !== 1 ? 's' : ''}
+            </span>
+          </div>
+
+          <div className="space-y-3">
+            {data.installmentSummary.map((item, i) => {
+              const pct = item.total > 0 ? Math.round((item.current / item.total) * 100) : 0;
+              return (
+                <div key={i} className="border border-zinc-100 rounded-xl p-4">
+                  <div className="flex items-start justify-between gap-3 mb-2">
+                    <div className="min-w-0">
+                      <p className="text-sm font-semibold text-zinc-800 truncate">{item.title}</p>
+                      <div className="flex items-center gap-2 mt-0.5 flex-wrap">
+                        <span className="text-xs font-medium text-violet-600 bg-violet-50 px-2 py-0.5 rounded-full">
+                          {item.current}/{item.total} parcelas
+                        </span>
+                        {item.card_name && (
+                          <span
+                            className="text-xs font-medium px-2 py-0.5 rounded-full text-white"
+                            style={{ backgroundColor: item.card_color || '#6b7280' }}
+                          >
+                            {item.card_name}
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                    <div className="text-right flex-shrink-0">
+                      <p className="text-sm font-bold text-zinc-800">{formatCurrency(item.monthlyAmount)}<span className="text-xs font-normal text-zinc-400">/mês</span></p>
+                      <p className="text-xs text-zinc-400 mt-0.5">Resta {formatCurrency(item.totalRemaining)}</p>
+                    </div>
+                  </div>
+                  <div className="w-full bg-zinc-100 rounded-full h-1.5">
+                    <div
+                      className="h-1.5 rounded-full bg-violet-400 transition-all duration-500"
+                      style={{ width: `${pct}%` }}
+                    />
+                  </div>
+                  <p className="text-xs text-zinc-400 mt-1">{item.remainingCount} parcela{item.remainingCount !== 1 ? 's' : ''} restante{item.remainingCount !== 1 ? 's' : ''}</p>
+                </div>
+              );
+            })}
+          </div>
+
+          {/* Rodapé: total mensal comprometido */}
+          <div className="mt-4 pt-4 border-t border-zinc-100 flex items-center justify-between">
+            <p className="text-sm text-zinc-500">Total mensal em parcelas</p>
+            <p className="text-sm font-bold text-violet-600">{formatCurrency(data.totalMonthlyInstallments)}</p>
           </div>
         </div>
       )}

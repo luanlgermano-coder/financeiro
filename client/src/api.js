@@ -89,6 +89,7 @@ export const confirmUpload = (transactions, card_id, owner) =>
 export const getSettings = () => api.get('/settings');
 export const updateSettings = (data) => api.put('/settings', data);
 export const resetData = () => api.delete('/transactions/all');
+export const resetMonth = () => api.delete('/transactions/month');
 
 // Goals
 export const getGoals = () => api.get('/goals');

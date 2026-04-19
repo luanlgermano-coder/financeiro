@@ -108,6 +108,61 @@ router.get('/', (req, res) => {
       });
     }
 
+    // Compras parceladas ativas
+    const today = new Date().toISOString().slice(0, 10);
+    const allInstallmentTx = db.prepare(`
+      SELECT t.description, t.amount, t.date, t.card_id,
+             c.name as card_name, c.color as card_color
+      FROM transactions t
+      LEFT JOIN cards c ON t.card_id = c.id
+      WHERE t.type = 'expense'
+        AND t.description GLOB '* (*/*)'
+      ORDER BY t.description, t.date
+    `).all();
+
+    const installmentMap = {};
+    for (const tx of allInstallmentTx) {
+      const match = tx.description.match(/^(.*)\s+\((\d+)\/(\d+)\)$/);
+      if (!match) continue;
+      const [, baseTitle, xStr, yStr] = match;
+      const x = parseInt(xStr);
+      const y = parseInt(yStr);
+      const key = `${baseTitle}|||${y}|||${tx.amount}|||${tx.card_id || 0}`;
+      if (!installmentMap[key]) {
+        installmentMap[key] = {
+          title: baseTitle,
+          total: y,
+          amount: tx.amount,
+          card_name: tx.card_name || null,
+          card_color: tx.card_color || null,
+          dates: [],
+        };
+      }
+      installmentMap[key].dates.push({ x, date: tx.date });
+    }
+
+    const installmentSummary = Object.values(installmentMap)
+      .map(g => {
+        const paidCount      = g.dates.filter(i => i.date <= today).length;
+        const remainingCount = g.total - paidCount;
+        return {
+          title:         g.title,
+          current:       paidCount,
+          total:         g.total,
+          remainingCount,
+          monthlyAmount: g.amount,
+          totalRemaining: parseFloat((remainingCount * g.amount).toFixed(2)),
+          card_name:     g.card_name,
+          card_color:    g.card_color,
+        };
+      })
+      .filter(g => g.remainingCount > 0)
+      .sort((a, b) => a.remainingCount - b.remainingCount);
+
+    const totalMonthlyInstallments = parseFloat(
+      installmentSummary.reduce((s, g) => s + g.monthlyAmount, 0).toFixed(2)
+    );
+
     // Metas mais próximas do prazo (ativas)
     const upcomingGoals = db.prepare(`
       SELECT * FROM goals
@@ -130,6 +185,8 @@ router.get('/', (req, res) => {
       ownerSummary,
       upcomingGoals,
       debtEvolution,
+      installmentSummary,
+      totalMonthlyInstallments,
     });
   } catch (err) {
     console.error(err);

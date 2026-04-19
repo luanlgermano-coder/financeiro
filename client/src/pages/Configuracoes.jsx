@@ -1,19 +1,62 @@
 import React, { useState, useEffect } from 'react';
-import { Save, Trash2, AlertTriangle, CheckCircle2 } from 'lucide-react';
-import { getSettings, updateSettings, resetData } from '../api';
+import { Save, Trash2, AlertTriangle, CheckCircle2, X, CalendarX } from 'lucide-react';
+import { getSettings, updateSettings, resetData, resetMonth } from '../api';
+
+function ConfirmModal({ title, message, confirmLabel, onConfirm, onClose, loading }) {
+  return (
+    <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+      <div className="bg-white rounded-2xl shadow-xl w-full max-w-sm">
+        <div className="flex items-center justify-between px-6 py-4 border-b border-zinc-100">
+          <div className="flex items-center gap-2">
+            <AlertTriangle size={18} className="text-red-500" />
+            <h2 className="font-bold text-zinc-900">{title}</h2>
+          </div>
+          <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-zinc-100 text-zinc-400 transition-colors">
+            <X size={16} />
+          </button>
+        </div>
+        <div className="px-6 py-5">
+          <p className="text-sm text-zinc-600">{message}</p>
+        </div>
+        <div className="flex gap-2 px-6 pb-5">
+          <button
+            onClick={onClose}
+            className="flex-1 py-2.5 border border-zinc-300 text-zinc-700 rounded-lg text-sm font-medium hover:bg-zinc-50 transition-colors"
+          >
+            Cancelar
+          </button>
+          <button
+            onClick={onConfirm}
+            disabled={loading}
+            className="flex-1 py-2.5 bg-red-500 hover:bg-red-600 disabled:opacity-60 text-white rounded-lg text-sm font-semibold transition-colors"
+          >
+            {loading ? 'Aguarde…' : confirmLabel}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
 
 export default function Configuracoes() {
-  const [form, setForm]       = useState({ user_name: '', spouse_name: '' });
-  const [saving, setSaving]   = useState(false);
-  const [resetting, setResetting] = useState(false);
+  const [form, setForm]     = useState({ user_name: '', spouse_name: '' });
+  const [saving, setSaving] = useState(false);
   const [success, setSuccess] = useState('');
   const [error, setError]     = useState('');
+
+  // modais
+  const [showAllModal,   setShowAllModal]   = useState(false);
+  const [showMonthModal, setShowMonthModal] = useState(false);
+  const [loadingAll,   setLoadingAll]   = useState(false);
+  const [loadingMonth, setLoadingMonth] = useState(false);
+
+  const currentMonthLabel = new Date().toLocaleString('pt-BR', { month: 'long', year: 'numeric' });
 
   useEffect(() => {
     getSettings().then(r => {
       setForm({
-        user_name:    r.data.user_name    || '',
-        spouse_name:  r.data.spouse_name  || '',
+        user_name:   r.data.user_name   || '',
+        spouse_name: r.data.spouse_name || '',
       });
     }).catch(() => {});
   }, []);
@@ -32,25 +75,35 @@ export default function Configuracoes() {
     }
   };
 
-  const handleReset = async () => {
-    const confirmed = window.confirm(
-      'Tem certeza? Isso vai apagar TODAS as transações, dívidas e assinaturas.\n' +
-      'Categorias e cartões serão mantidos.\n\n' +
-      'Esta ação não pode ser desfeita.'
-    );
-    if (!confirmed) return;
-    setResetting(true);
+  const handleResetAll = async () => {
+    setLoadingAll(true);
     setSuccess('');
     setError('');
     try {
       await resetData();
-      setSuccess('Dados removidos com sucesso. Transações, dívidas e assinaturas foram apagados.');
-      // Avisa todas as páginas abertas para recarregar
+      setShowAllModal(false);
+      setSuccess('Todos os dados foram apagados.');
       window.dispatchEvent(new CustomEvent('transaction-saved'));
     } catch (err) {
       setError(err.response?.data?.error || 'Erro ao limpar dados.');
     } finally {
-      setResetting(false);
+      setLoadingAll(false);
+    }
+  };
+
+  const handleResetMonth = async () => {
+    setLoadingMonth(true);
+    setSuccess('');
+    setError('');
+    try {
+      await resetMonth();
+      setShowMonthModal(false);
+      setSuccess(`Lançamentos de ${currentMonthLabel} apagados.`);
+      window.dispatchEvent(new CustomEvent('transaction-saved'));
+    } catch (err) {
+      setError(err.response?.data?.error || 'Erro ao limpar dados do mês.');
+    } finally {
+      setLoadingMonth(false);
     }
   };
 
@@ -120,24 +173,63 @@ export default function Configuracoes() {
           </div>
         </div>
 
+        {/* Limpar dados do mês */}
         <div className="border border-red-200 rounded-xl p-4 space-y-3">
           <div>
-            <p className="text-sm font-semibold text-zinc-800">Limpar dados de teste</p>
+            <p className="text-sm font-semibold text-zinc-800">Limpar dados do mês atual</p>
+            <p className="text-xs text-zinc-500 mt-0.5 capitalize">
+              Remove todos os lançamentos de <strong>{currentMonthLabel}</strong>. Dívidas e assinaturas são mantidas.
+            </p>
+          </div>
+          <button
+            onClick={() => setShowMonthModal(true)}
+            className="flex items-center gap-2 bg-red-500 hover:bg-red-600 text-white text-sm font-semibold px-4 py-2.5 rounded-lg transition-colors"
+          >
+            <CalendarX size={15} />
+            Limpar dados do mês atual
+          </button>
+        </div>
+
+        {/* Limpar todos os dados */}
+        <div className="border border-red-200 rounded-xl p-4 space-y-3">
+          <div>
+            <p className="text-sm font-semibold text-zinc-800">Limpar todos os dados</p>
             <p className="text-xs text-zinc-500 mt-0.5">
-              Remove todas as <strong>transações</strong>, <strong>dívidas</strong> e <strong>assinaturas</strong>.
+              Remove <strong>todos</strong> os lançamentos, dívidas e assinaturas permanentemente.
               Categorias e cartões são mantidos.
             </p>
           </div>
           <button
-            onClick={handleReset}
-            disabled={resetting}
-            className="flex items-center gap-2 bg-red-500 hover:bg-red-600 disabled:opacity-60 text-white text-sm font-semibold px-4 py-2.5 rounded-lg transition-colors"
+            onClick={() => setShowAllModal(true)}
+            className="flex items-center gap-2 bg-red-700 hover:bg-red-800 text-white text-sm font-semibold px-4 py-2.5 rounded-lg transition-colors"
           >
             <Trash2 size={15} />
-            {resetting ? 'Limpando…' : 'Limpar dados de teste'}
+            Limpar todos os dados
           </button>
         </div>
       </div>
+
+      {showMonthModal && (
+        <ConfirmModal
+          title="Limpar dados do mês"
+          message={`Tem certeza? Isso vai apagar todos os lançamentos de ${currentMonthLabel}.`}
+          confirmLabel="Sim, apagar mês"
+          onConfirm={handleResetMonth}
+          onClose={() => setShowMonthModal(false)}
+          loading={loadingMonth}
+        />
+      )}
+
+      {showAllModal && (
+        <ConfirmModal
+          title="Limpar todos os dados"
+          message="Tem certeza? Essa ação vai apagar TODOS os lançamentos, gastos e histórico permanentemente."
+          confirmLabel="Sim, apagar tudo"
+          onConfirm={handleResetAll}
+          onClose={() => setShowAllModal(false)}
+          loading={loadingAll}
+        />
+      )}
     </div>
   );
 }
