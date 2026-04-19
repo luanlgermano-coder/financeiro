@@ -68,7 +68,7 @@ export default function Layout({ children, onLogout }) {
           {/* Botão lançamento — ícone no mobile, texto no desktop */}
           <button
             onClick={() => setShowModal(true)}
-            className="flex items-center justify-center gap-2 bg-emerald-500 hover:bg-emerald-600 text-white font-semibold rounded-lg transition-colors shadow-sm
+            className="flex items-center justify-center gap-2 bg-gradient-to-r from-emerald-500 to-emerald-600 hover:from-emerald-600 hover:to-emerald-700 text-white font-semibold rounded-lg transition-all shadow-md hover:shadow-lg active:scale-95
               w-9 h-9 md:w-auto md:h-auto md:px-4 md:py-2 md:text-sm flex-shrink-0"
             aria-label="Novo lançamento"
           >
@@ -78,7 +78,7 @@ export default function Layout({ children, onLogout }) {
         </header>
 
         {/* Conteúdo */}
-        <main className="flex-1 p-4 md:p-6">
+        <main key={location.pathname} className="flex-1 p-4 md:p-6 page-fade-in">
           {children}
         </main>
       </div>

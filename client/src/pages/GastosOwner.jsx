@@ -347,8 +347,8 @@ export default function GastosOwner({ owner: ownerProp = 'luan' }) {
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-zinc-50">
-                    {transactions.map(t => (
-                      <tr key={t.id} className="hover:bg-zinc-50 transition-colors group">
+                    {transactions.map((t, i) => (
+                      <tr key={t.id} className={`transition-colors group ${i % 2 === 0 ? 'bg-white' : 'bg-zinc-50/70'} hover:bg-blue-50/40`}>
                         <td className="px-4 py-3 text-zinc-500 whitespace-nowrap text-xs">{formatDate(t.date)}</td>
                         <td className="px-4 py-3">
                           {(() => {

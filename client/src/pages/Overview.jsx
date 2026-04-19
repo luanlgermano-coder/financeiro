@@ -1,27 +1,27 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import {
-  BarChart, Bar, LineChart, Line,
+  AreaChart, Area, LineChart, Line,
   XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend
 } from 'recharts';
 import {
   TrendingUp, TrendingDown, Landmark, Wallet,
   ArrowUpRight, ArrowDownRight, ChevronLeft, ChevronRight,
-  ArrowUp, ArrowDown, AlertTriangle, CheckCircle2, Info, Lightbulb, Target, CreditCard
+  ArrowUp, ArrowDown, AlertTriangle, CheckCircle2, Lightbulb, Target, CreditCard
 } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { getDashboard } from '../api';
 import { formatCurrency, formatDate, getCurrentMonth, getMonthOptions, originLabel, originColor } from '../utils/formatters';
 
-const StatCard = ({ label, value, icon: Icon, color, sub }) => (
-  <div className={`bg-white rounded-2xl p-5 shadow-sm border-l-4 ${color}`}>
+const StatCard = ({ label, value, icon: Icon, gradient, sub }) => (
+  <div className={`${gradient} rounded-2xl p-5 shadow-md hover:shadow-lg transition-shadow`}>
     <div className="flex items-start justify-between">
       <div>
-        <p className="text-xs font-medium text-zinc-500 uppercase tracking-wider">{label}</p>
-        <p className="text-2xl font-bold text-zinc-900 mt-1">{formatCurrency(value)}</p>
-        {sub && <p className="text-xs text-zinc-400 mt-1">{sub}</p>}
+        <p className="text-xs font-semibold text-white/70 uppercase tracking-wider">{label}</p>
+        <p className="text-3xl font-extrabold text-white mt-1 tracking-tight">{formatCurrency(value)}</p>
+        {sub && <p className="text-xs text-white/60 mt-1">{sub}</p>}
       </div>
-      <div className={`p-2.5 rounded-xl ${color.replace('border-', 'bg-').replace('-500', '-100').replace('-400', '-100')}`}>
-        <Icon size={20} className={color.replace('border-', 'text-')} />
+      <div className="p-2.5 rounded-xl bg-white/20">
+        <Icon size={20} className="text-white" />
       </div>
     </div>
   </div>
@@ -69,125 +69,131 @@ function buildInsights(data) {
     prevMonthIncome, prevMonthExpense,
     categoryBreakdown, prevCategoryBreakdown,
     debtTotal, monthlyDebt,
+    upcomingGoals = [],
   } = data;
 
-  const prevSurplus = prevMonthIncome - prevMonthExpense;
-
-  // 1. Comparação de gastos com mês anterior
-  if (prevMonthExpense > 0) {
-    const diff = expense - prevMonthExpense;
-    const pct  = Math.round(Math.abs(diff / prevMonthExpense) * 100);
-    if (diff > 0) {
-      insights.push({
-        icon: TrendingUp,
-        color: 'text-red-500',
-        bg: 'bg-red-50 border-red-200',
-        text: `Seus gastos aumentaram ${pct}% em relação ao mês anterior (+${formatCurrency(diff)}).`,
-      });
-    } else if (diff < 0) {
-      insights.push({
-        icon: TrendingDown,
-        color: 'text-emerald-500',
-        bg: 'bg-emerald-50 border-emerald-200',
-        text: `Seus gastos caíram ${pct}% em relação ao mês anterior (${formatCurrency(diff)}).`,
-      });
-    }
+  // 1. Sem gastos → incentiva registro
+  if (income > 0 && expense === 0) {
+    insights.push({
+      type: 'tip',
+      icon: Lightbulb,
+      title: 'Nenhum gasto registrado ainda',
+      body: 'Registre suas despesas para ter uma visão completa do seu mês.',
+      action: 'Comece adicionando um lançamento pelo botão "+ Lançamento" no topo.',
+    });
+    return insights;
   }
 
-  // 2. Categoria que mais cresceu
-  if (prevCategoryBreakdown && prevCategoryBreakdown.length > 0 && categoryBreakdown.length > 0) {
-    const prevMap = Object.fromEntries(prevCategoryBreakdown.map(c => [c.id, c.total]));
-    let topCat = null, topGrowth = -Infinity;
-    for (const cat of categoryBreakdown) {
-      const prev = prevMap[cat.id] || 0;
-      if (prev > 0) {
-        const growth = (cat.total - prev) / prev;
-        if (growth > topGrowth && growth > 0.1) {
-          topGrowth = growth;
-          topCat = { ...cat, prev };
+  // 2. Gastos > 20% maiores que mês anterior → destaca categoria que mais cresceu
+  if (prevMonthExpense > 0) {
+    const pctDiff = (expense - prevMonthExpense) / prevMonthExpense;
+    if (pctDiff > 0.20) {
+      let biggestCat = null, biggestDiff = 0;
+      if (prevCategoryBreakdown?.length > 0 && categoryBreakdown.length > 0) {
+        const prevMap = Object.fromEntries(prevCategoryBreakdown.map(c => [c.id, c.total]));
+        for (const cat of categoryBreakdown) {
+          const diff = cat.total - (prevMap[cat.id] || 0);
+          if (diff > biggestDiff) { biggestDiff = diff; biggestCat = cat; }
         }
       }
-    }
-    if (topCat) {
-      const pct = Math.round(topGrowth * 100);
+      const pct = Math.round(pctDiff * 100);
       insights.push({
+        type: 'warning',
+        icon: TrendingUp,
+        title: `Gastos ${pct}% acima do mês passado`,
+        body: biggestCat
+          ? `A categoria "${biggestCat.name}" foi a que mais cresceu (+${formatCurrency(biggestDiff)}).`
+          : `Você gastou ${formatCurrency(expense - prevMonthExpense)} a mais que no mês anterior.`,
+        action: `Revise os gastos em "${biggestCat?.name ?? 'suas principais categorias'}" para retomar o controle.`,
+      });
+    } else if (pctDiff < -0.10) {
+      const pct = Math.round(Math.abs(pctDiff) * 100);
+      insights.push({
+        type: 'positive',
+        icon: TrendingDown,
+        title: `Gastos ${pct}% menores que o mês passado`,
+        body: `Você economizou ${formatCurrency(Math.abs(expense - prevMonthExpense))} em relação ao mês anterior.`,
+        action: 'Continue assim! Considere destinar a diferença para suas metas.',
+      });
+    }
+  }
+
+  // 3. Alimentação/iFood > 15% da renda
+  if (income > 0 && categoryBreakdown.length > 0) {
+    const foodKeywords = ['alimenta', 'ifood', 'comida', 'restaurante', 'mercado', 'supermercado', 'refei'];
+    const foodCats = categoryBreakdown.filter(c =>
+      foodKeywords.some(kw => c.name.toLowerCase().includes(kw))
+    );
+    const foodTotal = foodCats.reduce((s, c) => s + c.total, 0);
+    if (foodTotal > 0 && foodTotal / income > 0.15) {
+      const pct = Math.round((foodTotal / income) * 100);
+      insights.push({
+        type: 'warning',
         icon: AlertTriangle,
-        color: 'text-amber-500',
-        bg: 'bg-amber-50 border-amber-200',
-        text: `A categoria "${topCat.name}" cresceu ${pct}% vs. mês anterior (${formatCurrency(topCat.prev)} → ${formatCurrency(topCat.total)}).`,
+        title: `Alimentação representa ${pct}% da renda`,
+        body: `Você gastou ${formatCurrency(foodTotal)} em alimentação — acima do recomendado (15%).`,
+        action: 'Tente cozinhar mais em casa e reduzir pedidos por aplicativo 2–3 vezes por semana.',
       });
     }
   }
 
-  // 3. Tendência da sobra
-  if (prevMonthIncome > 0 || prevSurplus !== 0) {
-    const diff = surplus - prevSurplus;
-    if (Math.abs(diff) > 10) {
-      insights.push({
-        icon: diff >= 0 ? CheckCircle2 : Info,
-        color: diff >= 0 ? 'text-emerald-500' : 'text-zinc-500',
-        bg: diff >= 0 ? 'bg-emerald-50 border-emerald-200' : 'bg-zinc-50 border-zinc-200',
-        text: diff >= 0
-          ? `Sua sobra melhorou ${formatCurrency(diff)} em relação ao mês anterior.`
-          : `Sua sobra piorou ${formatCurrency(Math.abs(diff))} em relação ao mês anterior.`,
-      });
-    }
-  }
-
-  // 4. Alerta de categoria > 30% da renda
+  // 4. Sobra < 20% da renda → alerta sobre custos fixos
   if (income > 0) {
-    for (const cat of categoryBreakdown) {
-      const pct = Math.round((cat.total / income) * 100);
-      if (pct >= 30) {
-        insights.push({
-          icon: AlertTriangle,
-          color: 'text-red-500',
-          bg: 'bg-red-50 border-red-200',
-          text: `Atenção: "${cat.name}" representa ${pct}% da sua renda (${formatCurrency(cat.total)}).`,
-        });
-      }
+    const surplusPct = surplus / income;
+    if (surplusPct < 0.20 && surplusPct >= 0) {
+      const committedPct = Math.round(((income - surplus) / income) * 100);
+      insights.push({
+        type: 'warning',
+        icon: AlertTriangle,
+        title: `Sobra abaixo de 20% da renda`,
+        body: `${committedPct}% da sua renda está comprometida com gastos, dívidas e assinaturas.`,
+        action: 'Identifique assinaturas ou gastos fixos que somam mais de 10% da renda e corte os desnecessários.',
+      });
+    } else if (surplusPct >= 0.30 && income > 0) {
+      insights.push({
+        type: 'positive',
+        icon: CheckCircle2,
+        title: 'Sobra saudável este mês',
+        body: `Você tem ${formatCurrency(surplus)} disponível (${Math.round(surplusPct * 100)}% da renda).`,
+        action: 'Aproveite para acelerar o pagamento de dívidas ou depositar nas suas metas.',
+      });
     }
   }
 
-  // 5. Progresso de dívidas
-  if (debtTotal > 0) {
-    insights.push({
-      icon: Landmark,
-      color: 'text-amber-500',
-      bg: 'bg-amber-50 border-amber-200',
-      text: `Você tem ${formatCurrency(debtTotal)} em dívidas ativas. Parcelas mensais: ${formatCurrency(monthlyDebt)}.`,
-    });
+  // 5. Parcelas mensais de dívidas ≥ 20% da renda → sugere quitar a maior
+  if (debtTotal > 0 && income > 0) {
+    const debtPct = Math.round((monthlyDebt / income) * 100);
+    if (debtPct >= 20) {
+      insights.push({
+        type: 'warning',
+        icon: Landmark,
+        title: `${debtPct}% da renda vai para dívidas`,
+        body: `Você paga ${formatCurrency(monthlyDebt)}/mês em parcelas de dívidas (total: ${formatCurrency(debtTotal)}).`,
+        action: 'Priorize quitar a dívida com maior taxa de juros para reduzir o custo total mais rápido.',
+      });
+    }
   }
 
-  // 6. Meta mais próxima da conclusão (maior %)
-  const upcomingGoals = data.upcomingGoals || [];
+  // 6. Meta próxima do prazo e abaixo de 50% → calcula aporte necessário
   if (upcomingGoals.length > 0) {
-    const closest = [...upcomingGoals].sort((a, b) =>
-      (b.current_amount / b.target_amount) - (a.current_amount / a.target_amount)
-    )[0];
-    const pct = closest.target_amount > 0
-      ? Math.round((closest.current_amount / closest.target_amount) * 100)
-      : 0;
-    if (pct > 0) {
-      insights.push({
-        icon: Target,
-        color: 'text-emerald-500',
-        bg: 'bg-emerald-50 border-emerald-200',
-        text: `Você está ${pct}% mais perto de atingir a meta "${closest.title}".`,
-      });
-    }
-
-    // Meta com prazo mais próximo
-    const soonest = upcomingGoals[0];
-    const remaining = soonest.target_amount - soonest.current_amount;
-    const deadlineStr = new Date(soonest.deadline + 'T00:00:00').toLocaleDateString('pt-BR');
-    if (remaining > 0) {
-      insights.push({
-        icon: Target,
-        color: 'text-blue-500',
-        bg: 'bg-blue-50 border-blue-200',
-        text: `Faltam ${formatCurrency(remaining)} para atingir a meta "${soonest.title}" até ${deadlineStr}.`,
-      });
+    const today = new Date(); today.setHours(0, 0, 0, 0);
+    for (const goal of upcomingGoals) {
+      const dl = new Date(goal.deadline + 'T00:00:00');
+      const daysLeft = Math.ceil((dl - today) / 86400000);
+      const pct = goal.target_amount > 0 ? goal.current_amount / goal.target_amount : 0;
+      if (daysLeft > 0 && daysLeft <= 60 && pct < 0.5) {
+        const monthsLeft = Math.max(1, Math.round(daysLeft / 30));
+        const remaining = goal.target_amount - goal.current_amount;
+        const monthlyNeeded = Math.ceil(remaining / monthsLeft);
+        insights.push({
+          type: 'tip',
+          icon: Target,
+          title: `Meta "${goal.title}" precisa de atenção`,
+          body: `Faltam ${daysLeft} dias e você está em ${Math.round(pct * 100)}% da meta.`,
+          action: `Deposite ${formatCurrency(monthlyNeeded)}/mês para atingir o objetivo a tempo.`,
+        });
+        break;
+      }
     }
   }
 
@@ -270,34 +276,34 @@ export default function Overview() {
           label="Entradas do mês"
           value={data.income}
           icon={Wallet}
-          color="border-emerald-400"
+          gradient="bg-gradient-to-br from-emerald-500 to-emerald-700"
           sub="Total de receitas registradas"
         />
         <StatCard
           label="Sobra estimada"
           value={data.surplus}
           icon={TrendingUp}
-          color="border-emerald-500"
+          gradient={data.surplus >= 0 ? "bg-gradient-to-br from-teal-500 to-cyan-600" : "bg-gradient-to-br from-red-400 to-red-600"}
           sub="Renda − (Gastos + Dívidas + Assinaturas)"
         />
         <StatCard
           label="Total gasto"
           value={data.expense}
           icon={TrendingDown}
-          color="border-red-500"
+          gradient="bg-gradient-to-br from-red-500 to-rose-600"
           sub={`${data.categoryBreakdown.length} categorias`}
         />
         <StatCard
           label="Total em dívidas"
           value={data.debtTotal}
           icon={Landmark}
-          color="border-amber-500"
-          sub={`Parcelas mensais: ${formatCurrency(data.monthlyDebt)}`}
+          gradient="bg-gradient-to-br from-amber-500 to-orange-500"
+          sub={`Parcelas: ${formatCurrency(data.monthlyDebt)}`}
         />
       </div>
 
       {/* Saúde financeira */}
-      <div className="bg-white rounded-2xl p-5 shadow-sm">
+      <div className="bg-white rounded-2xl p-5 shadow-sm hover:shadow-md transition-shadow">
         <div className="flex items-center justify-between mb-3">
           <div>
             <h3 className="font-semibold text-zinc-900">Saúde Financeira</h3>
@@ -335,18 +341,30 @@ export default function Overview() {
 
       {/* Insights do mês */}
       {insights.length > 0 && (
-        <div className="bg-white rounded-2xl p-5 shadow-sm">
+        <div className="bg-white rounded-2xl p-5 shadow-sm hover:shadow-md transition-shadow">
           <div className="flex items-center gap-2 mb-4">
             <Lightbulb size={18} className="text-amber-400" />
             <h3 className="font-semibold text-zinc-900">Insights do Mês</h3>
           </div>
-          <div className="space-y-2.5">
+          <div className="space-y-3">
             {insights.map((ins, i) => {
               const Icon = ins.icon;
+              const styles = {
+                warning:  { wrap: 'bg-red-50 border-red-200',     icon: 'text-red-500',     title: 'text-red-800',     action: 'text-red-600' },
+                tip:      { wrap: 'bg-amber-50 border-amber-200', icon: 'text-amber-500',   title: 'text-amber-800',   action: 'text-amber-700' },
+                positive: { wrap: 'bg-emerald-50 border-emerald-200', icon: 'text-emerald-500', title: 'text-emerald-800', action: 'text-emerald-700' },
+              };
+              const s = styles[ins.type] || styles.tip;
               return (
-                <div key={i} className={`flex items-start gap-3 border rounded-xl px-4 py-3 ${ins.bg}`}>
-                  <Icon size={16} className={`${ins.color} flex-shrink-0 mt-0.5`} />
-                  <p className="text-sm text-zinc-700">{ins.text}</p>
+                <div key={i} className={`border rounded-xl px-4 py-3.5 ${s.wrap}`}>
+                  <div className="flex items-start gap-3">
+                    <Icon size={16} className={`${s.icon} flex-shrink-0 mt-0.5`} />
+                    <div className="space-y-1">
+                      <p className={`text-sm font-semibold ${s.title}`}>{ins.title}</p>
+                      <p className="text-sm text-zinc-600">{ins.body}</p>
+                      <p className={`text-xs font-semibold ${s.action}`}>→ {ins.action}</p>
+                    </div>
+                  </div>
                 </div>
               );
             })}
@@ -356,7 +374,7 @@ export default function Overview() {
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Categorias */}
-        <div className="bg-white rounded-2xl p-5 shadow-sm">
+        <div className="bg-white rounded-2xl p-5 shadow-sm hover:shadow-md transition-shadow">
           <h3 className="font-semibold text-zinc-900 mb-4">Gastos por Categoria</h3>
           {data.categoryBreakdown.length === 0 ? (
             <p className="text-zinc-400 text-sm text-center py-8">Nenhum gasto registrado</p>
@@ -370,7 +388,7 @@ export default function Overview() {
         </div>
 
         {/* Últimos lançamentos */}
-        <div className="bg-white rounded-2xl p-5 shadow-sm">
+        <div className="bg-white rounded-2xl p-5 shadow-sm hover:shadow-md transition-shadow">
           <h3 className="font-semibold text-zinc-900 mb-4">Últimos Lançamentos</h3>
           {data.recentTransactions.length === 0 ? (
             <p className="text-zinc-400 text-sm text-center py-8">Nenhum lançamento ainda</p>
@@ -473,7 +491,7 @@ export default function Overview() {
 
       {/* Evolução consolidada das dívidas */}
       {data.debtEvolution && data.debtEvolution.some(p => p.balance > 0) && (
-        <div className="bg-white rounded-2xl p-5 shadow-sm">
+        <div className="bg-white rounded-2xl p-5 shadow-sm hover:shadow-md transition-shadow">
           <h3 className="font-semibold text-zinc-900 mb-6">Evolução das Dívidas — Últimos 6 Meses</h3>
           <ResponsiveContainer width="100%" height={200}>
             <LineChart data={data.debtEvolution} margin={{ top: 4, right: 8, left: 0, bottom: 0 }}>
@@ -538,7 +556,7 @@ export default function Overview() {
 
       {/* Compromissos Futuros — parcelas ativas */}
       {data.installmentSummary && data.installmentSummary.length > 0 && (
-        <div className="bg-white rounded-2xl p-5 shadow-sm">
+        <div className="bg-white rounded-2xl p-5 shadow-sm hover:shadow-md transition-shadow">
           <div className="flex items-center justify-between mb-4">
             <div className="flex items-center gap-2">
               <CreditCard size={18} className="text-violet-500" />
@@ -597,21 +615,31 @@ export default function Overview() {
       )}
 
       {/* Evolução mensal */}
-      <div className="bg-white rounded-2xl p-5 shadow-sm">
+      <div className="bg-white rounded-2xl p-5 shadow-sm hover:shadow-md transition-shadow">
         <h3 className="font-semibold text-zinc-900 mb-6">Evolução dos Últimos 6 Meses</h3>
         <ResponsiveContainer width="100%" height={240}>
-          <BarChart data={data.monthlyEvolution} barGap={4}>
+          <AreaChart data={data.monthlyEvolution} margin={{ top: 4, right: 8, left: 0, bottom: 0 }}>
+            <defs>
+              <linearGradient id="gradIncome" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="5%"  stopColor="#10b981" stopOpacity={0.3} />
+                <stop offset="95%" stopColor="#10b981" stopOpacity={0.03} />
+              </linearGradient>
+              <linearGradient id="gradExpense" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="5%"  stopColor="#3b82f6" stopOpacity={0.25} />
+                <stop offset="95%" stopColor="#3b82f6" stopOpacity={0.03} />
+              </linearGradient>
+            </defs>
             <CartesianGrid strokeDasharray="3 3" stroke="#f4f4f5" />
             <XAxis dataKey="month" tick={{ fontSize: 12, fill: '#71717a' }} />
-            <YAxis tick={{ fontSize: 11, fill: '#71717a' }} tickFormatter={v => `R$${(v/1000).toFixed(0)}k`} />
+            <YAxis tick={{ fontSize: 11, fill: '#71717a' }} tickFormatter={v => `R$${(v/1000).toFixed(0)}k`} width={52} />
             <Tooltip content={<CustomTooltip />} />
             <Legend
               formatter={(value) => value === 'income' ? 'Receitas' : 'Gastos'}
               wrapperStyle={{ fontSize: 12 }}
             />
-            <Bar dataKey="income" name="income" fill="#10b981" radius={[4, 4, 0, 0]} />
-            <Bar dataKey="expense" name="expense" fill="#3b82f6" radius={[4, 4, 0, 0]} />
-          </BarChart>
+            <Area type="monotone" dataKey="income"  name="income"  stroke="#10b981" strokeWidth={2.5} fill="url(#gradIncome)"  dot={{ r: 4, fill: '#10b981' }} activeDot={{ r: 6 }} />
+            <Area type="monotone" dataKey="expense" name="expense" stroke="#3b82f6" strokeWidth={2.5} fill="url(#gradExpense)" dot={{ r: 4, fill: '#3b82f6' }} activeDot={{ r: 6 }} />
+          </AreaChart>
         </ResponsiveContainer>
       </div>
     </div>

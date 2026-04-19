@@ -2,6 +2,11 @@
 @tailwind components;
 @tailwind utilities;
 
+@keyframes page-fade-in {
+  from { opacity: 0; transform: translateY(6px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
 @layer base {
   * {
     box-sizing: border-box;
@@ -13,6 +18,9 @@
 }
 
 @layer utilities {
+  .page-fade-in {
+    animation: page-fade-in 0.18s ease-out both;
+  }
   .scrollbar-thin {
     scrollbar-width: thin;
     scrollbar-color: #3f3f46 transparent;

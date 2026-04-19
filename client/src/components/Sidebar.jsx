@@ -9,23 +9,23 @@ import {
 // Contexto para fechar o menu ao navegar no mobile
 const CloseCtx = createContext(null);
 
-const NavItem = ({ to, icon: Icon, label, accent }) => {
+const NavItem = ({ to, icon: Icon, label, accent, iconColor }) => {
   const onClose = useContext(CloseCtx);
   return (
     <NavLink
       to={to}
       onClick={onClose}
       className={({ isActive }) =>
-        `flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
+        `flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-all ${
           isActive
-            ? 'bg-zinc-700 text-white'
-            : 'text-zinc-400 hover:text-white hover:bg-zinc-800'
+            ? 'bg-white/10 text-white shadow-sm'
+            : 'text-zinc-400 hover:text-white hover:bg-white/5'
         }`
       }
     >
       {accent
         ? <span className="w-[18px] h-[18px] rounded-full flex-shrink-0" style={{ backgroundColor: accent }} />
-        : <Icon size={18} />
+        : <Icon size={18} className={iconColor || ''} />
       }
       <span>{label}</span>
     </NavLink>
@@ -53,11 +53,12 @@ export default function Sidebar({ isOpen, onClose, onLogout }) {
     <CloseCtx.Provider value={onClose}>
       <aside
         className={`
-          fixed top-0 left-0 h-full w-60 bg-[#18181b] flex flex-col z-40
+          fixed top-0 left-0 h-full w-60 flex flex-col z-40
           transition-transform duration-300 ease-in-out
           ${isOpen ? 'translate-x-0' : '-translate-x-full'}
           md:translate-x-0
         `}
+        style={{ background: 'linear-gradient(160deg, #0f1117 0%, #161b2e 60%, #1a1f2e 100%)' }}
       >
         {/* Logo + botão fechar (mobile) */}
         <div className="flex items-center justify-between px-5 py-5 border-b border-zinc-800">
@@ -88,7 +89,7 @@ export default function Sidebar({ isOpen, onClose, onLogout }) {
         {/* Navigation */}
         <nav className="flex-1 px-3 py-4 space-y-1 overflow-y-auto">
           <Section label="Painel">
-            <NavItem to="/" icon={LayoutDashboard} label="Visão Geral" />
+            <NavItem to="/" icon={LayoutDashboard} label="Visão Geral" iconColor="text-amber-400" />
           </Section>
 
           <Section label="Entradas">
@@ -107,11 +108,11 @@ export default function Sidebar({ isOpen, onClose, onLogout }) {
           </Section>
 
           <Section label="Outros" defaultOpen={false}>
-            <NavItem to="/metas"         icon={Target}        label="Metas" />
-            <NavItem to="/assinaturas"   icon={Repeat2}       label="Assinaturas" />
-            <NavItem to="/whatsapp"      icon={MessageCircle} label="WhatsApp" />
-            <NavItem to="/upload"        icon={FileUp}        label="Upload Fatura" />
-            <NavItem to="/configuracoes" icon={Settings}      label="Configurações" />
+            <NavItem to="/metas"         icon={Target}        label="Metas"          iconColor="text-emerald-400" />
+            <NavItem to="/assinaturas"   icon={Repeat2}       label="Assinaturas"    iconColor="text-violet-400" />
+            <NavItem to="/whatsapp"      icon={MessageCircle} label="WhatsApp"       iconColor="text-green-400" />
+            <NavItem to="/upload"        icon={FileUp}        label="Upload Fatura"  iconColor="text-sky-400" />
+            <NavItem to="/configuracoes" icon={Settings}      label="Configurações"  iconColor="text-zinc-400" />
           </Section>
         </nav>
 
