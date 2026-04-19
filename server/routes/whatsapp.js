@@ -233,14 +233,11 @@ router.post('/whatsapp', async (req, res) => {
     // Resolve owner:
     // - Mensagem de grupo autorizado: usa participant para identificar quem enviou
     // - Mensagem direta: fromMe=true → Luan, fromMe=false → Bárbara
-    const LUAN_PHONE_CLEAN = (process.env.LUAN_PHONE || '5519982275251').replace(/\D/g, '');
-    let owner;
+    // Em ambos os casos (grupo ou direto): fromMe=true → Luan, fromMe=false → Bárbara
+    const owner = fromMe ? 'luan' : 'barbara';
     if (isGroup) {
-      const senderPhone = (participant || '').replace(/@.*$/, '').replace(/\D/g, '');
-      owner = senderPhone === LUAN_PHONE_CLEAN ? 'luan' : 'barbara';
-      console.log(`[WhatsApp webhook] Grupo autorizado — participant=${participant}, owner=${owner}`);
+      console.log(`[WhatsApp webhook] Grupo autorizado — fromMe=${fromMe}, owner=${owner}`);
     } else {
-      owner = fromMe ? 'luan' : 'barbara';
       console.log(`[WhatsApp webhook] Mensagem direta — fromMe=${fromMe}, owner=${owner}`);
     }
 
