@@ -210,12 +210,16 @@ router.post('/whatsapp', async (req, res) => {
       body?.from     ||
       null;
 
-    const pushName = data?.pushName || data?.name || null;
+    const pushName    = data?.pushName || data?.name || null;
+    // participant vem em mensagens de grupo (quem enviou dentro do grupo)
+    const participant = data?.participant || key?.participant || null;
 
-    // ── Ignora mensagens de grupos (@g.us) ──────────────────────────────────
-    if (senderNumber && senderNumber.endsWith('@g.us')) {
-      console.log(`[WhatsApp webhook] Ignorado: mensagem de grupo ${senderNumber}`);
-      return res.json({ status: 'ignored', reason: 'Grupo ignorado' });
+    // ── Filtra grupos: só permite o grupo "Gastos Luan & Bárbara" ────────────
+    const ALLOWED_GROUP = '120363420313878402@g.us';
+    const isGroup = senderNumber && senderNumber.endsWith('@g.us');
+    if (isGroup && senderNumber !== ALLOWED_GROUP) {
+      console.log(`[WhatsApp webhook] Ignorado: grupo não autorizado ${senderNumber}`);
+      return res.json({ status: 'ignored', reason: 'Grupo não autorizado' });
     }
 
     // ── Ignora se não há texto ───────────────────────────────────────────────
@@ -226,10 +230,19 @@ router.post('/whatsapp', async (req, res) => {
 
     console.log(`[WhatsApp webhook] Mensagem de ${senderNumber} (${pushName || 'sem nome'}) fromMe=${fromMe}: "${messageText}"`);
 
-    // fromMe=true → mensagem enviada pelo próprio número (Luan)
-    // fromMe=false → mensagem recebida de outro número (Bárbara)
-    const owner = fromMe ? 'luan' : 'barbara';
-    console.log(`[WhatsApp webhook] Owner definido: ${owner} (fromMe=${fromMe})`);
+    // Resolve owner:
+    // - Mensagem de grupo autorizado: usa participant para identificar quem enviou
+    // - Mensagem direta: fromMe=true → Luan, fromMe=false → Bárbara
+    const LUAN_PHONE_CLEAN = (process.env.LUAN_PHONE || '5519982275251').replace(/\D/g, '');
+    let owner;
+    if (isGroup) {
+      const senderPhone = (participant || '').replace(/@.*$/, '').replace(/\D/g, '');
+      owner = senderPhone === LUAN_PHONE_CLEAN ? 'luan' : 'barbara';
+      console.log(`[WhatsApp webhook] Grupo autorizado — participant=${participant}, owner=${owner}`);
+    } else {
+      owner = fromMe ? 'luan' : 'barbara';
+      console.log(`[WhatsApp webhook] Mensagem direta — fromMe=${fromMe}, owner=${owner}`);
+    }
 
     // Prefixo CONFIRMAR: bypass de duplicata
     const FORCE_PREFIX = /^CONFIRMAR\s+/i;
