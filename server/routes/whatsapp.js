@@ -212,12 +212,6 @@ router.post('/whatsapp', async (req, res) => {
 
     const pushName = data?.pushName || data?.name || null;
 
-    // ── Ignora mensagens enviadas pelo próprio bot (evita loop) ─────────────
-    if (fromMe) {
-      console.log('[WhatsApp webhook] Ignorado: mensagem enviada pelo bot (fromMe=true)');
-      return res.json({ status: 'ignored', reason: 'fromMe' });
-    }
-
     // ── Ignora mensagens de grupos (@g.us) ──────────────────────────────────
     if (senderNumber && senderNumber.endsWith('@g.us')) {
       console.log(`[WhatsApp webhook] Ignorado: mensagem de grupo ${senderNumber}`);
