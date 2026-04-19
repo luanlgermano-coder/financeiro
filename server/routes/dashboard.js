@@ -108,32 +108,33 @@ router.get('/', (req, res) => {
       });
     }
 
-    // Compras parceladas ativas
+    // Compras parceladas ativas — usa colunas installment_current/total
     const today = new Date().toISOString().slice(0, 10);
     const allInstallmentTx = db.prepare(`
       SELECT t.description, t.amount, t.date, t.card_id,
+             t.installment_current, t.installment_total,
              c.name as card_name, c.color as card_color
       FROM transactions t
       LEFT JOIN cards c ON t.card_id = c.id
       WHERE t.type = 'expense'
-        AND t.description GLOB '* (*/*)'
+        AND t.installment_total IS NOT NULL
+        AND t.installment_total > 0
       ORDER BY t.description, t.date
     `).all();
 
     const installmentMap = {};
     for (const tx of allInstallmentTx) {
-      const match = tx.description.match(/^(.*)\s+\((\d+)\/(\d+)\)$/);
-      if (!match) continue;
-      const [, baseTitle, xStr, yStr] = match;
-      const x = parseInt(xStr);
-      const y = parseInt(yStr);
-      const key = `${baseTitle}|||${y}|||${tx.amount}|||${tx.card_id || 0}`;
+      const x = tx.installment_current;
+      const y = tx.installment_total;
+      // Base title: strip trailing " (X/Y)" if present, otherwise use description as-is
+      const baseTitle = tx.description.replace(/\s*\(\d+\/\d+\)$/, '').trim();
+      const key = `${baseTitle}|||${y}|||${tx.card_id || 0}`;
       if (!installmentMap[key]) {
         installmentMap[key] = {
-          title: baseTitle,
-          total: y,
-          amount: tx.amount,
-          card_name: tx.card_name || null,
+          title:      baseTitle,
+          total:      y,
+          amount:     tx.amount,
+          card_name:  tx.card_name || null,
           card_color: tx.card_color || null,
           dates: [],
         };
@@ -143,17 +144,17 @@ router.get('/', (req, res) => {
 
     const installmentSummary = Object.values(installmentMap)
       .map(g => {
-        const paidCount      = g.dates.filter(i => i.date <= today).length;
+        const paidCount      = g.dates.filter(d => d.date <= today).length;
         const remainingCount = g.total - paidCount;
         return {
-          title:         g.title,
-          current:       paidCount,
-          total:         g.total,
+          title:          g.title,
+          current:        paidCount,
+          total:          g.total,
           remainingCount,
-          monthlyAmount: g.amount,
+          monthlyAmount:  g.amount,
           totalRemaining: parseFloat((remainingCount * g.amount).toFixed(2)),
-          card_name:     g.card_name,
-          card_color:    g.card_color,
+          card_name:      g.card_name,
+          card_color:     g.card_color,
         };
       })
       .filter(g => g.remainingCount > 0)

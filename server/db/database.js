@@ -43,6 +43,8 @@ async function initialize() {
     'ALTER TABLE transactions ADD COLUMN hash TEXT',
     'ALTER TABLE transactions ADD COLUMN owner TEXT',
     'ALTER TABLE debts ADD COLUMN owner TEXT',
+    'ALTER TABLE transactions ADD COLUMN installment_current INTEGER',
+    'ALTER TABLE transactions ADD COLUMN installment_total INTEGER',
     `CREATE TABLE IF NOT EXISTS goals (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       title TEXT NOT NULL,
@@ -60,6 +62,12 @@ async function initialize() {
       date TEXT NOT NULL,
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP
     )`,
+    // Backfill installment columns from existing "(X/Y)" descriptions
+    `UPDATE transactions
+       SET installment_current = CAST(SUBSTR(description, INSTR(description,'(')+1, INSTR(description,'/')-INSTR(description,'(')-1) AS INTEGER),
+           installment_total   = CAST(SUBSTR(description, INSTR(description,'/')+1, INSTR(description,')')-INSTR(description,'/')-1) AS INTEGER)
+     WHERE description GLOB '* (*/*)'
+       AND (installment_current IS NULL OR installment_total IS NULL)`,
   ];
   for (const sql of migrations) {
     try { _db.exec(sql); } catch (_) { /* column already exists — safe to ignore */ }

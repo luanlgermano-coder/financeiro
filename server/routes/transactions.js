@@ -19,6 +19,7 @@ const SELECT_FULL = `
     t.id, t.description, t.amount, t.date, t.type, t.origin,
     t.notes, t.hash, t.owner, t.created_at,
     t.category_id, t.card_id,
+    t.installment_current, t.installment_total,
     c.name  as category_name,  c.color as category_color, c.icon as category_icon,
     ca.name as card_name,      ca.color as card_color
   FROM transactions t
@@ -88,9 +89,9 @@ router.post('/installments', (req, res) => {
       const desc        = `${description} (${i}/${n})`;
       const hash        = makeHash(desc, amount, installDate);
       const result = db.prepare(`
-        INSERT INTO transactions (description, amount, date, type, category_id, card_id, origin, notes, hash, owner)
-        VALUES (?, ?, ?, 'expense', ?, ?, 'manual', ?, ?, ?)
-      `).run(desc, amount, installDate, category_id || null, card_id || null, notes || null, hash, owner || null);
+        INSERT INTO transactions (description, amount, date, type, category_id, card_id, origin, notes, hash, owner, installment_current, installment_total)
+        VALUES (?, ?, ?, 'expense', ?, ?, 'manual', ?, ?, ?, ?, ?)
+      `).run(desc, amount, installDate, category_id || null, card_id || null, notes || null, hash, owner || null, i, n);
       created.push({ id: result.lastInsertRowid, description: desc, amount, date: installDate });
     }
 
