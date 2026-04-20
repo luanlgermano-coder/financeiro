@@ -6,26 +6,57 @@ import {
 import {
   TrendingUp, TrendingDown, Landmark, Wallet,
   ArrowUpRight, ArrowDownRight, ChevronLeft, ChevronRight,
-  ArrowUp, ArrowDown, AlertTriangle, CheckCircle2, Lightbulb, Target, CreditCard
+  ArrowUp, ArrowDown, AlertTriangle, CheckCircle2, Lightbulb, Target, CreditCard,
+  Eye, EyeOff, Plus, X, Calendar, Trash2
 } from 'lucide-react';
 import { Link } from 'react-router-dom';
-import { getDashboard } from '../api';
+import { getDashboard, getBills, createBill, deleteBill } from '../api';
 import { formatCurrency, formatDate, getCurrentMonth, getMonthOptions, originLabel, originColor } from '../utils/formatters';
 
-const StatCard = ({ label, value, icon: Icon, gradient, sub }) => (
-  <div className={`${gradient} rounded-2xl p-5 shadow-md hover:shadow-lg transition-shadow`}>
-    <div className="flex items-start justify-between">
-      <div>
-        <p className="text-xs font-semibold text-white/70 uppercase tracking-wider">{label}</p>
-        <p className="text-3xl font-extrabold text-white mt-1 tracking-tight">{formatCurrency(value)}</p>
-        {sub && <p className="text-xs text-white/60 mt-1">{sub}</p>}
-      </div>
-      <div className="p-2.5 rounded-xl bg-white/20">
-        <Icon size={20} className="text-white" />
+const DEBT_HIDDEN_KEY = 'fin_debt_hidden';
+
+const StatCard = ({ label, value, icon: Icon, gradient, sub, hideable }) => {
+  const [hidden, setHidden] = useState(
+    hideable ? localStorage.getItem(DEBT_HIDDEN_KEY) !== 'false' : false
+  );
+
+  const toggle = (e) => {
+    e.stopPropagation();
+    const next = !hidden;
+    setHidden(next);
+    localStorage.setItem(DEBT_HIDDEN_KEY, String(next));
+  };
+
+  return (
+    <div className={`${gradient} rounded-2xl p-5 shadow-md hover:shadow-lg transition-shadow`}>
+      <div className="flex items-start justify-between">
+        <div>
+          <p className="text-xs font-semibold text-white/70 uppercase tracking-wider">{label}</p>
+          <p className="text-3xl font-extrabold text-white mt-1 tracking-tight">
+            {hideable && hidden ? 'R$ ••••••' : formatCurrency(value)}
+          </p>
+          {sub && <p className="text-xs text-white/60 mt-1">{sub}</p>}
+        </div>
+        <div className="flex flex-col items-end gap-1.5">
+          <div className="p-2.5 rounded-xl bg-white/20">
+            <Icon size={20} className="text-white" />
+          </div>
+          {hideable && (
+            <button
+              onClick={toggle}
+              className="p-1.5 rounded-lg bg-white/10 hover:bg-white/20 transition-colors"
+              title={hidden ? 'Mostrar valor' : 'Ocultar valor'}
+            >
+              {hidden
+                ? <Eye size={13} className="text-white/80" />
+                : <EyeOff size={13} className="text-white/80" />}
+            </button>
+          )}
+        </div>
       </div>
     </div>
-  </div>
-);
+  );
+};
 
 const CategoryBar = ({ name, color, total, max }) => {
   const pct = max > 0 ? Math.round((total / max) * 100) : 0;
@@ -61,6 +92,132 @@ const CustomTooltip = ({ active, payload, label }) => {
   }
   return null;
 };
+
+function daysUntilDue(due_day) {
+  const today = new Date();
+  const day = today.getDate();
+  const year = today.getFullYear();
+  const month = today.getMonth();
+  const nextDue = due_day >= day
+    ? new Date(year, month, due_day)
+    : new Date(year, month + 1, due_day);
+  return Math.ceil((nextDue - today) / 86400000);
+}
+
+function BillModal({ onClose, onSave }) {
+  const [form, setForm] = useState({ name: '', amount: '', due_day: '', owner: 'casal', category: '' });
+  const [saving, setSaving] = useState(false);
+  const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
+
+  const submit = async (e) => {
+    e.preventDefault();
+    if (!form.name || !form.amount || !form.due_day) return;
+    setSaving(true);
+    try {
+      await onSave({
+        name: form.name,
+        amount: parseFloat(form.amount),
+        due_day: parseInt(form.due_day),
+        owner: form.owner,
+        category: form.category || null,
+      });
+      onClose();
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4" onClick={onClose}>
+      <div className="bg-white rounded-2xl shadow-xl w-full max-w-md" onClick={e => e.stopPropagation()}>
+        <div className="flex items-center justify-between p-5 border-b border-zinc-100">
+          <h2 className="font-semibold text-zinc-900">Nova Conta Recorrente</h2>
+          <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-zinc-100 transition-colors">
+            <X size={16} className="text-zinc-500" />
+          </button>
+        </div>
+        <form onSubmit={submit} className="p-5 space-y-4">
+          <div>
+            <label className="text-xs font-medium text-zinc-600 block mb-1.5">Nome</label>
+            <input
+              className="w-full border border-zinc-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-400"
+              placeholder="Ex: Aluguel, Netflix, Academia..."
+              value={form.name}
+              onChange={e => set('name', e.target.value)}
+              required
+              autoFocus
+            />
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="text-xs font-medium text-zinc-600 block mb-1.5">Valor (R$)</label>
+              <input
+                type="number"
+                step="0.01"
+                min="0"
+                className="w-full border border-zinc-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-400"
+                placeholder="0,00"
+                value={form.amount}
+                onChange={e => set('amount', e.target.value)}
+                required
+              />
+            </div>
+            <div>
+              <label className="text-xs font-medium text-zinc-600 block mb-1.5">Dia do vencimento</label>
+              <input
+                type="number"
+                min="1"
+                max="31"
+                className="w-full border border-zinc-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-400"
+                placeholder="1 – 31"
+                value={form.due_day}
+                onChange={e => set('due_day', e.target.value)}
+                required
+              />
+            </div>
+          </div>
+          <div>
+            <label className="text-xs font-medium text-zinc-600 block mb-1.5">Responsável</label>
+            <select
+              className="w-full border border-zinc-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-400"
+              value={form.owner}
+              onChange={e => set('owner', e.target.value)}
+            >
+              <option value="casal">Casal</option>
+              <option value="luan">Luan</option>
+              <option value="barbara">Bárbara</option>
+            </select>
+          </div>
+          <div>
+            <label className="text-xs font-medium text-zinc-600 block mb-1.5">Categoria (opcional)</label>
+            <input
+              className="w-full border border-zinc-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-400"
+              placeholder="Ex: Moradia, Lazer, Saúde..."
+              value={form.category}
+              onChange={e => set('category', e.target.value)}
+            />
+          </div>
+          <div className="flex gap-2 pt-1">
+            <button
+              type="button"
+              onClick={onClose}
+              className="flex-1 border border-zinc-200 text-zinc-600 rounded-xl py-2 text-sm font-medium hover:bg-zinc-50 transition-colors"
+            >
+              Cancelar
+            </button>
+            <button
+              type="submit"
+              disabled={saving}
+              className="flex-1 bg-emerald-500 hover:bg-emerald-600 disabled:opacity-60 text-white rounded-xl py-2 text-sm font-medium transition-colors"
+            >
+              {saving ? 'Salvando...' : 'Salvar'}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}
 
 function buildInsights(data) {
   const insights = [];
@@ -208,12 +365,23 @@ function healthPhrase(pct) {
   return 'Alerta: você está gastando mais do que ganha!';
 }
 
+const BILL_TABS = [
+  { key: 'all',      label: 'Todos' },
+  { key: 'luan',     label: 'Luan' },
+  { key: 'barbara',  label: 'Bárbara' },
+  { key: 'casal',    label: 'Casal' },
+];
+
 export default function Overview() {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
   const months = getMonthOptions(12);
   const [monthIdx, setMonthIdx] = useState(0);
   const currentMonth = months[monthIdx].value;
+
+  const [bills, setBills] = useState([]);
+  const [billsTab, setBillsTab] = useState('all');
+  const [showBillModal, setShowBillModal] = useState(false);
 
   const load = useCallback(() => {
     setLoading(true);
@@ -223,12 +391,28 @@ export default function Overview() {
       .finally(() => setLoading(false));
   }, [currentMonth]);
 
+  const loadBills = useCallback(() => {
+    getBills().then(r => setBills(r.data)).catch(console.error);
+  }, []);
+
   useEffect(() => { load(); }, [load]);
+  useEffect(() => { loadBills(); }, [loadBills]);
   useEffect(() => {
     const handler = () => load();
     window.addEventListener('transaction-saved', handler);
     return () => window.removeEventListener('transaction-saved', handler);
   }, [load]);
+
+  const handleSaveBill = async (billData) => {
+    await createBill(billData);
+    loadBills();
+  };
+
+  const handleDeleteBill = async (id) => {
+    if (!confirm('Remover esta conta?')) return;
+    await deleteBill(id);
+    loadBills();
+  };
 
   if (loading) return (
     <div className="flex items-center justify-center h-64">
@@ -241,8 +425,18 @@ export default function Overview() {
   const maxCategory = data.categoryBreakdown.length > 0 ? Math.max(...data.categoryBreakdown.map(c => c.total)) : 1;
   const insights = buildInsights(data);
 
+  const filteredBills = billsTab === 'all'
+    ? bills
+    : bills.filter(b => b.owner === billsTab);
+
+  const billsTotalMonth = filteredBills.reduce((s, b) => s + b.amount, 0);
+
   return (
     <div className="space-y-6">
+      {showBillModal && (
+        <BillModal onClose={() => setShowBillModal(false)} onSave={handleSaveBill} />
+      )}
+
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
@@ -299,6 +493,7 @@ export default function Overview() {
           icon={Landmark}
           gradient="bg-gradient-to-br from-amber-500 to-orange-500"
           sub={`Parcelas: ${formatCurrency(data.monthlyDebt)}`}
+          hideable
         />
       </div>
 
@@ -371,6 +566,120 @@ export default function Overview() {
           </div>
         </div>
       )}
+
+      {/* Próximos Vencimentos */}
+      <div className="bg-white rounded-2xl p-5 shadow-sm hover:shadow-md transition-shadow">
+        <div className="flex items-center justify-between mb-4">
+          <div className="flex items-center gap-2">
+            <Calendar size={18} className="text-blue-500" />
+            <h3 className="font-semibold text-zinc-900">Próximos Vencimentos</h3>
+          </div>
+          <button
+            onClick={() => setShowBillModal(true)}
+            className="flex items-center gap-1.5 text-xs font-medium text-emerald-600 hover:text-emerald-700 bg-emerald-50 hover:bg-emerald-100 px-3 py-1.5 rounded-lg transition-colors"
+          >
+            <Plus size={13} />
+            Adicionar conta
+          </button>
+        </div>
+
+        {/* Tabs */}
+        <div className="flex gap-1 mb-4">
+          {BILL_TABS.map(tab => (
+            <button
+              key={tab.key}
+              onClick={() => setBillsTab(tab.key)}
+              className={`px-3 py-1 rounded-lg text-xs font-medium transition-colors ${
+                billsTab === tab.key
+                  ? 'bg-blue-500 text-white'
+                  : 'text-zinc-500 hover:bg-zinc-100'
+              }`}
+            >
+              {tab.label}
+            </button>
+          ))}
+        </div>
+
+        {filteredBills.length === 0 ? (
+          <div className="text-center py-8">
+            <Calendar size={28} className="text-zinc-300 mx-auto mb-2" />
+            <p className="text-zinc-400 text-sm">Nenhuma conta recorrente cadastrada</p>
+            <button
+              onClick={() => setShowBillModal(true)}
+              className="mt-3 text-xs text-emerald-600 hover:text-emerald-700 font-medium"
+            >
+              + Adicionar primeira conta
+            </button>
+          </div>
+        ) : (
+          <>
+            <div className="space-y-2">
+              {filteredBills.map(bill => {
+                const days = daysUntilDue(bill.due_day);
+                const isUrgent = days <= 3;
+                const isWarning = days <= 7 && days > 3;
+                const ownerColors = {
+                  luan:    { bg: 'bg-blue-100',  text: 'text-blue-700'  },
+                  barbara: { bg: 'bg-pink-100',  text: 'text-pink-700'  },
+                  casal:   { bg: 'bg-violet-100', text: 'text-violet-700' },
+                };
+                const oc = ownerColors[bill.owner] || ownerColors.casal;
+                const ownerLabel = bill.owner === 'barbara' ? 'Bárbara' : bill.owner.charAt(0).toUpperCase() + bill.owner.slice(1);
+
+                return (
+                  <div
+                    key={bill.id}
+                    className={`flex items-center gap-3 p-3 rounded-xl border transition-colors ${
+                      isUrgent
+                        ? 'bg-red-50 border-red-200'
+                        : isWarning
+                        ? 'bg-amber-50 border-amber-200'
+                        : 'bg-zinc-50 border-zinc-100 hover:bg-zinc-100'
+                    }`}
+                  >
+                    <div className={`w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0 font-bold text-sm ${
+                      isUrgent ? 'bg-red-500 text-white' : isWarning ? 'bg-amber-500 text-white' : 'bg-zinc-200 text-zinc-600'
+                    }`}>
+                      {bill.due_day}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-medium text-zinc-800 truncate">{bill.name}</p>
+                      <div className="flex items-center gap-1.5 mt-0.5 flex-wrap">
+                        {bill.category && (
+                          <span className="text-xs text-zinc-400">{bill.category}</span>
+                        )}
+                        <span className={`text-xs font-medium px-1.5 py-0.5 rounded-md ${oc.bg} ${oc.text}`}>
+                          {ownerLabel}
+                        </span>
+                      </div>
+                    </div>
+                    <div className="text-right flex-shrink-0 mr-1">
+                      <p className="text-sm font-bold text-zinc-800">{formatCurrency(bill.amount)}</p>
+                      <p className={`text-xs font-medium mt-0.5 ${
+                        isUrgent ? 'text-red-600' : isWarning ? 'text-amber-600' : 'text-zinc-400'
+                      }`}>
+                        {days === 0 ? 'Vence hoje' : days === 1 ? 'Amanhã' : `${days}d`}
+                      </p>
+                    </div>
+                    <button
+                      onClick={() => handleDeleteBill(bill.id)}
+                      className="p-1.5 rounded-lg hover:bg-red-100 transition-colors flex-shrink-0"
+                    >
+                      <Trash2 size={13} className="text-zinc-400 hover:text-red-500" />
+                    </button>
+                  </div>
+                );
+              })}
+            </div>
+            {filteredBills.length > 0 && (
+              <div className="mt-4 pt-3 border-t border-zinc-100 flex justify-between items-center">
+                <p className="text-xs text-zinc-500">{filteredBills.length} conta{filteredBills.length !== 1 ? 's' : ''} recorrente{filteredBills.length !== 1 ? 's' : ''}</p>
+                <p className="text-sm font-bold text-blue-600">{formatCurrency(billsTotalMonth)}/mês</p>
+              </div>
+            )}
+          </>
+        )}
+      </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Categorias */}

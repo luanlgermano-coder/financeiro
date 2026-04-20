@@ -134,6 +134,19 @@ async function initialize() {
       )
     `);
 
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS bills (
+        id       SERIAL PRIMARY KEY,
+        name     TEXT NOT NULL,
+        amount   FLOAT8 NOT NULL,
+        due_day  INTEGER NOT NULL CHECK (due_day BETWEEN 1 AND 31),
+        owner    TEXT NOT NULL DEFAULT 'casal',
+        category TEXT,
+        active   INTEGER NOT NULL DEFAULT 1,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      )
+    `);
+
     // Seed default categories (explicit ids so references stay stable)
     await client.query(`
       INSERT INTO categories (id, name, color, icon) VALUES

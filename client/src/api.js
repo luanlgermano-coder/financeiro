@@ -98,4 +98,10 @@ export const updateGoal = (id, data) => api.put(`/goals/${id}`, data);
 export const deleteGoal = (id) => api.delete(`/goals/${id}`);
 export const depositGoal = (id, amount) => api.post(`/goals/${id}/deposit`, { amount });
 
+// Bills
+export const getBills = (owner) => api.get('/bills', owner ? { params: { owner } } : {});
+export const createBill = (data) => api.post('/bills', data);
+export const updateBill = (id, data) => api.put(`/bills/${id}`, data);
+export const deleteBill = (id) => api.delete(`/bills/${id}`);
+
 export default api;
