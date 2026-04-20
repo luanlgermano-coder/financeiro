@@ -1,40 +1,46 @@
 const express = require('express');
 const router = express.Router();
-const db = require('../db/database');
+const { query } = require('../db/database-pg');
 
-router.get('/', (req, res) => {
+router.get('/', async (req, res) => {
   try {
-    const rows = db.prepare(`SELECT * FROM cards ORDER BY name`).all();
+    const { rows } = await query(`SELECT * FROM cards ORDER BY name`);
     res.json(rows);
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
 });
 
-router.post('/', (req, res) => {
+router.post('/', async (req, res) => {
   try {
     const { name, color } = req.body;
     if (!name) return res.status(400).json({ error: 'Nome é obrigatório' });
-    const result = db.prepare(`INSERT INTO cards (name, color) VALUES (?, ?)`).run(name, color || '#6b7280');
-    res.status(201).json(db.prepare(`SELECT * FROM cards WHERE id = ?`).get(result.lastInsertRowid));
+    const { rows } = await query(
+      `INSERT INTO cards (name, color) VALUES (?, ?) RETURNING *`,
+      [name, color || '#6b7280']
+    );
+    res.status(201).json(rows[0]);
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
 });
 
-router.put('/:id', (req, res) => {
+router.put('/:id', async (req, res) => {
   try {
     const { name, color } = req.body;
-    db.prepare(`UPDATE cards SET name=?, color=? WHERE id=?`).run(name, color, req.params.id);
-    res.json(db.prepare(`SELECT * FROM cards WHERE id = ?`).get(req.params.id));
+    const { rows } = await query(
+      `UPDATE cards SET name=?, color=? WHERE id=? RETURNING *`,
+      [name, color, req.params.id]
+    );
+    res.json(rows[0]);
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
 });
 
-router.delete('/:id', (req, res) => {
+router.delete('/:id', async (req, res) => {
   try {
-    db.prepare(`DELETE FROM cards WHERE id = ?`).run(req.params.id);
+    await query(`DELETE FROM cards WHERE id = ?`, [req.params.id]);
     res.json({ success: true });
   } catch (err) {
     res.status(500).json({ error: err.message });

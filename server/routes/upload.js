@@ -3,7 +3,7 @@ const router = express.Router();
 const multer = require('multer');
 const pdfParse = require('pdf-parse');
 const { GoogleGenerativeAI } = require('@google/generative-ai');
-const db = require('../db/database');
+const { query, withTransaction } = require('../db/database-pg');
 const { makeHash, findDuplicate } = require('../utils/duplicates');
 
 const storage = multer.memoryStorage();
@@ -38,7 +38,7 @@ router.post('/fatura', upload.single('pdf'), async (req, res) => {
     }
 
     const today = new Date().toISOString().slice(0, 10);
-    const categories = db.prepare(`SELECT id, name FROM categories`).all();
+    const { rows: categories } = await query(`SELECT id, name FROM categories`);
     const categoryNames = categories.map(c => c.name).join(', ');
 
     const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
@@ -83,15 +83,14 @@ Regras:
 
     const extracted = JSON.parse(jsonMatch[0]);
 
-    // Enriquece com IDs de categoria + flag de duplicata
-    const enriched = (extracted.transactions || []).map(t => {
+    // Enrich with category ids + duplicate flag
+    const enriched = await Promise.all((extracted.transactions || []).map(async (t) => {
       const cat = categories.find(
         c => c.name.toLowerCase() === (t.category || '').toLowerCase()
       );
       const category_id = cat ? cat.id : null;
 
-      // Verifica duplicata
-      const duplicate = findDuplicate(db, {
+      const duplicate = await findDuplicate({
         amount: t.amount,
         date: t.date,
         description: t.description,
@@ -102,16 +101,16 @@ Regras:
         ...t,
         category_id,
         category_name: cat ? cat.name : t.category,
-        isDuplicate: !!duplicate,
-        duplicateOf: duplicate || null,
+        isDuplicate:   !!duplicate,
+        duplicateOf:   duplicate || null,
       };
-    });
+    }));
 
     res.json({
-      transactions: enriched,
+      transactions:    enriched,
       reference_month: extracted.reference_month || today.slice(0, 7),
-      total: extracted.total || 0,
-      pages: pdfData.numpages
+      total:           extracted.total || 0,
+      pages:           pdfData.numpages
     });
   } catch (err) {
     console.error('Erro no upload:', err);
@@ -123,36 +122,27 @@ Regras:
   }
 });
 
-// POST /api/upload/confirm — confirma importação das transações extraídas
-router.post('/confirm', (req, res) => {
+// POST /api/upload/confirm
+router.post('/confirm', async (req, res) => {
   try {
     const { transactions, card_id, owner } = req.body;
     if (!transactions || !Array.isArray(transactions) || transactions.length === 0) {
       return res.status(400).json({ error: 'Nenhuma transação para importar' });
     }
 
-    const insert = db.prepare(`
-      INSERT INTO transactions (description, amount, date, type, category_id, card_id, origin, hash, owner)
-      VALUES (?, ?, ?, ?, ?, ?, 'pdf', ?, ?)
-    `);
-
-    const insertMany = db.transaction((txns) => {
-      for (const t of txns) {
+    await withTransaction(async (tq) => {
+      for (const t of transactions) {
         const hash = makeHash(t.description, t.amount, t.date);
-        insert.run(
-          t.description,
-          Math.abs(parseFloat(t.amount)),
-          t.date,
-          t.type || 'expense',
-          t.category_id || null,
-          card_id || null,
-          hash,
-          owner || null
+        await tq(
+          `INSERT INTO transactions (description, amount, date, type, category_id, card_id, origin, hash, owner)
+           VALUES (?, ?, ?, ?, ?, ?, 'pdf', ?, ?)`,
+          [t.description, Math.abs(parseFloat(t.amount)), t.date,
+           t.type || 'expense', t.category_id || null,
+           card_id || null, hash, owner || null]
         );
       }
     });
 
-    insertMany(transactions);
     res.json({ success: true, count: transactions.length });
   } catch (err) {
     res.status(500).json({ error: err.message });

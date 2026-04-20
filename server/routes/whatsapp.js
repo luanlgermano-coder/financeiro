@@ -1,6 +1,6 @@
 const express = require('express');
 const router = express.Router();
-const db = require('../db/database');
+const { query } = require('../db/database-pg');
 const { GoogleGenerativeAI } = require('@google/generative-ai');
 const { makeHash, findDuplicate } = require('../utils/duplicates');
 const { sendMessage } = require('../services/whatsapp.service');
@@ -19,7 +19,6 @@ function addMonths(dateStr, n) {
   return `${newY}-${String(newM).padStart(2,'0')}-${String(newD).padStart(2,'0')}`;
 }
 
-// Detecta "Nx" (12x, 3x…) e retorna N + texto limpo
 function detectInstallments(text) {
   const match = text.match(/\b(\d{1,2})[xX]\b/);
   if (!match) return { installments: 1, textClean: text };
@@ -28,7 +27,6 @@ function detectInstallments(text) {
   return { installments: n, textClean: text.replace(match[0], ' ').replace(/\s+/g, ' ').trim() };
 }
 
-// Detecta cartão pelo nome no texto
 function detectCardFromText(text, cards) {
   for (const card of cards) {
     const words = card.name.split(/\s+/).filter(w => w.length >= 4);
@@ -40,7 +38,7 @@ function detectCardFromText(text, cards) {
 }
 
 // ---------------------------------------------------------------------------
-// Parser rápido por regex
+// Regex parser
 // ---------------------------------------------------------------------------
 const CATEGORY_KEYWORDS = {
   'Alimentação':  /almo[çc]o|jantar|caf[eé]|lanche|restaurante|pizza|burger|hamburguer|sushi|ifood|rappi|delivery|padaria|a[çc]ougue/i,
@@ -61,13 +59,10 @@ function guessCategory(text) {
 }
 
 function regexParser(text) {
-  // Detecta parcelamento (12x, 3x…) e remove do texto para não confundir o parser de valor
   const { installments, textClean } = detectInstallments(text);
-
   const isIncome = /\b(recebi|receb[eu]|salário|salario|renda|entrada|pix\s+receb)\b/i.test(text);
   const type = isIncome ? 'income' : 'expense';
 
-  // Usa textClean (sem "Nx") para evitar que "12" de "12x" seja capturado como valor
   const valueMatch = textClean.match(/R?\$?\s*(\d{1,3}(?:[.,]\d{3})+(?:[.,]\d{2})?|\d+[.,]\d{1,2}|\d+)/i);
   if (!valueMatch) return null;
 
@@ -92,7 +87,6 @@ function regexParser(text) {
     }
   }
 
-  // Limpa descrição a partir do texto sem "Nx" e sem o valor
   let description = textClean
     .replace(/R?\$?\s*\d{1,3}(?:[.,]\d{3})*(?:[.,]\d{2})?/gi, '')
     .replace(/\b(gastei|paguei|comprei|recebi|hoje|ontem|\d{1,2}\/\d{1,2}(?:\/\d{2,4})?)\b/gi, '')
@@ -137,26 +131,8 @@ async function parseMessage(text) {
   return { ...fromGemini, _source: 'gemini' };
 }
 
-// Alias local para manter compatibilidade com o restante do arquivo
-const sendWhatsAppReply = (to, message) => sendMessage(to, message);
-
 // ---------------------------------------------------------------------------
-// Identifica o owner pelo número do remetente
-// ---------------------------------------------------------------------------
-function resolveOwner(senderNumber) {
-  if (!senderNumber) return null;
-  // RemoteJid formato: "5519999999999@s.whatsapp.net" ou só o número
-  const phone = senderNumber.replace(/@.*$/, '').replace(/\D/g, '');
-  const luanPhone    = (process.env.LUAN_PHONE    || '').replace(/\D/g, '');
-  const barbaraPhone = (process.env.BARBARA_PHONE || '').replace(/\D/g, '');
-
-  if (luanPhone    && phone === luanPhone)    return 'luan';
-  if (barbaraPhone && phone === barbaraPhone) return 'barbara';
-  return null;
-}
-
-// ---------------------------------------------------------------------------
-// GET /api/webhook/whatsapp — validação da Evolution API (retorna 200)
+// GET /api/webhook/whatsapp — validação da Evolution API
 // ---------------------------------------------------------------------------
 router.get('/whatsapp', (_req, res) => {
   res.json({ status: 'ok', service: 'financeiro-webhook' });
@@ -168,27 +144,14 @@ router.get('/whatsapp', (_req, res) => {
 router.post('/whatsapp', async (req, res) => {
   try {
     const body = req.body;
-
-    // ── Debug: loga o payload bruto para facilitar diagnóstico ──────────────
     console.log('[WhatsApp webhook] Payload recebido:', JSON.stringify(body, null, 2));
 
-    // ── Filtra eventos que não são mensagens recebidas ───────────────────────
-    // Evolution API envia outros eventos (messages.update, presence.update…)
     const event = body?.event;
     if (event && event !== 'messages.upsert') {
       console.log(`[WhatsApp webhook] Evento ignorado: ${event}`);
       return res.json({ status: 'ignored', reason: `Evento não processado: ${event}` });
     }
 
-    // ── Extrai dados da mensagem (Evolution API v1 e v2) ────────────────────
-    //
-    // Formato Evolution API:
-    //   body.data.key.remoteJid   → número do remetente
-    //   body.data.key.fromMe      → true se enviado pelo próprio bot
-    //   body.data.message.conversation          → texto simples
-    //   body.data.message.extendedTextMessage.text → texto com formatação/reply
-    //   body.data.pushName        → nome exibido do contato
-    //
     const data        = body?.data || body;
     const key         = data?.key  || {};
     const messageData = data?.message || body?.message;
@@ -202,19 +165,17 @@ router.post('/whatsapp', async (req, res) => {
       body?.text ||
       null;
 
-    // remoteJid pode vir como "5519...@s.whatsapp.net" ou só o número
     const senderNumber =
-      key?.remoteJid ||
+      key?.remoteJid  ||
       data?.remoteJid ||
-      body?.sender   ||
-      body?.from     ||
+      body?.sender    ||
+      body?.from      ||
       null;
 
     const pushName    = data?.pushName || data?.name || null;
-    // participant vem em mensagens de grupo (quem enviou dentro do grupo)
     const participant = data?.participant || key?.participant || null;
 
-    // ── Filtra grupos: só permite o grupo "Gastos Luan & Bárbara" ────────────
+    // Only allow the family group; reject all other groups
     const ALLOWED_GROUP = '120363420313878402@g.us';
     const isGroup = senderNumber && senderNumber.endsWith('@g.us');
     if (isGroup && senderNumber !== ALLOWED_GROUP) {
@@ -222,18 +183,13 @@ router.post('/whatsapp', async (req, res) => {
       return res.json({ status: 'ignored', reason: 'Grupo não autorizado' });
     }
 
-    // ── Ignora se não há texto ───────────────────────────────────────────────
     if (!messageText || !messageText.trim()) {
-      console.log('[WhatsApp webhook] Ignorado: sem texto (mídia, sticker, áudio…)');
+      console.log('[WhatsApp webhook] Ignorado: sem texto');
       return res.json({ status: 'ignored', reason: 'Sem texto na mensagem' });
     }
 
     console.log(`[WhatsApp webhook] Mensagem de ${senderNumber} (${pushName || 'sem nome'}) fromMe=${fromMe}: "${messageText}"`);
 
-    // Resolve owner:
-    // - Mensagem de grupo autorizado: usa participant para identificar quem enviou
-    // - Mensagem direta: fromMe=true → Luan, fromMe=false → Bárbara
-    // Em ambos os casos (grupo ou direto): fromMe=true → Luan, fromMe=false → Bárbara
     const owner = fromMe ? 'luan' : 'barbara';
     if (isGroup) {
       console.log(`[WhatsApp webhook] Grupo autorizado — fromMe=${fromMe}, owner=${owner}`);
@@ -241,31 +197,32 @@ router.post('/whatsapp', async (req, res) => {
       console.log(`[WhatsApp webhook] Mensagem direta — fromMe=${fromMe}, owner=${owner}`);
     }
 
-    // Prefixo CONFIRMAR: bypass de duplicata
     const FORCE_PREFIX = /^CONFIRMAR\s+/i;
-    const forceInsert = FORCE_PREFIX.test(messageText.trim());
+    const forceInsert  = FORCE_PREFIX.test(messageText.trim());
     if (forceInsert) messageText = messageText.trim().replace(FORCE_PREFIX, '');
 
     const receivedAt = new Date().toISOString();
     let parsed;
-    let status = 'processed';
+    let status   = 'processed';
     let errorMsg = null;
 
     try {
       parsed = await parseMessage(messageText);
 
-      const categoryRow = db.prepare(`SELECT id FROM categories WHERE name = ? COLLATE NOCASE`).get(parsed.category);
-      const categoryId  = categoryRow ? categoryRow.id : null;
+      // Resolve category id (case-insensitive)
+      const { rows: catRows } = await query(
+        `SELECT id FROM categories WHERE LOWER(name) = LOWER(?)`,
+        [parsed.category]
+      );
+      const categoryId = catRows[0]?.id || null;
 
-      // Detecta cartão pelo texto da mensagem
-      const allCards = db.prepare(`SELECT * FROM cards`).all();
+      // Detect card from message text
+      const { rows: allCards } = await query(`SELECT * FROM cards`);
       const detectedCard = detectCardFromText(messageText, allCards);
       const cardId = detectedCard ? detectedCard.id : null;
 
-      // -----------------------------------------------------------------------
-      // COMPRA PARCELADA: cria N transações com "(i/N)" na descrição
-      // -----------------------------------------------------------------------
       if ((parsed.installments || 1) > 1) {
+        // Installment purchase — create N transactions
         const n     = parsed.installments;
         const total = Math.abs(parsed.amount);
         const unit  = parseFloat((total / n).toFixed(2));
@@ -276,10 +233,11 @@ router.post('/whatsapp', async (req, res) => {
           const installDate = addMonths(parsed.date, i - 1);
           const desc        = `${parsed.description} (${i}/${n})`;
           const hash        = makeHash(desc, amount, installDate);
-          db.prepare(`
-            INSERT INTO transactions (description, amount, date, type, category_id, card_id, origin, hash, owner)
-            VALUES (?, ?, ?, 'expense', ?, ?, 'whatsapp', ?, ?)
-          `).run(desc, amount, installDate, categoryId, cardId, hash, owner);
+          await query(
+            `INSERT INTO transactions (description, amount, date, type, category_id, card_id, origin, hash, owner, installment_current, installment_total)
+             VALUES (?, ?, ?, 'expense', ?, ?, 'whatsapp', ?, ?, ?, ?)`,
+            [desc, amount, installDate, categoryId, cardId, hash, owner, i, n]
+          );
         }
 
         const ownerLabel = owner ? ` · ${owner === 'luan' ? 'Luan' : 'Bárbara'}` : '';
@@ -292,16 +250,12 @@ router.post('/whatsapp', async (req, res) => {
           `${cardLabel}\n` +
           `🏷️ ${parsed.category || 'Outros'}`;
 
-        if (senderNumber) await sendWhatsAppReply(senderNumber, replyMsg);
+        if (senderNumber) await sendMessage(senderNumber, replyMsg);
 
       } else {
-        // -----------------------------------------------------------------------
-        // TRANSAÇÃO SIMPLES
-        // -----------------------------------------------------------------------
-
-        // Anti-duplicata
+        // Simple transaction
         if (!forceInsert) {
-          const duplicate = findDuplicate(db, {
+          const duplicate = await findDuplicate({
             amount: parsed.amount, date: parsed.date,
             description: parsed.description, category_id: categoryId,
           });
@@ -314,28 +268,22 @@ router.post('/whatsapp', async (req, res) => {
               `Já existe: "${duplicate.description}" — R$ ${duplicate.amount.toFixed(2)} em ${duplicate.date}\n\n` +
               `Para registrar mesmo assim:\n*CONFIRMAR ${messageText}*`;
 
-            if (senderNumber) await sendWhatsAppReply(senderNumber, dupMsg);
+            if (senderNumber) await sendMessage(senderNumber, dupMsg);
 
-            const logsRow = db.prepare(`SELECT value FROM settings WHERE key='whatsapp_logs'`).get();
-            const logs = logsRow ? JSON.parse(logsRow.value) : [];
-            logs.unshift({
-              id: Date.now(), text: messageText, sender: senderNumber || 'desconhecido',
-              receivedAt, status: 'duplicate_pending', error: null,
-              parsed: { ...parsed, category: parsed.category }, owner, duplicateOf: duplicate,
-            });
-            db.prepare(`INSERT INTO settings (key,value) VALUES ('whatsapp_logs',?) ON CONFLICT(key) DO UPDATE SET value=excluded.value`).run(JSON.stringify(logs.slice(0, 100)));
+            await _saveLogs(messageText, senderNumber, receivedAt, 'duplicate_pending', null, parsed, owner, duplicate);
             return res.json({ status: 'duplicate_pending' });
           }
         }
 
-        // Insere transação simples
         const hash = makeHash(parsed.description, parsed.amount, parsed.date);
-        db.prepare(`
-          INSERT INTO transactions (description, amount, date, type, category_id, card_id, origin, hash, owner)
-          VALUES (?, ?, ?, ?, ?, ?, 'whatsapp', ?, ?)
-        `).run(parsed.description, Math.abs(parsed.amount), parsed.date, parsed.type, categoryId, cardId, hash, owner);
+        await query(
+          `INSERT INTO transactions (description, amount, date, type, category_id, card_id, origin, hash, owner)
+           VALUES (?, ?, ?, ?, ?, ?, 'whatsapp', ?, ?)`,
+          [parsed.description, Math.abs(parsed.amount), parsed.date, parsed.type,
+           categoryId, cardId, hash, owner]
+        );
 
-        const emoji = parsed.type === 'income' ? '💰' : '💸';
+        const emoji     = parsed.type === 'income' ? '💰' : '💸';
         const typeLabel = parsed.type === 'income' ? 'Receita' : 'Gasto';
         const ownerLabel = owner ? ` · ${owner === 'luan' ? 'Luan' : 'Bárbara'}` : '';
         const replyMsg =
@@ -345,59 +293,76 @@ router.post('/whatsapp', async (req, res) => {
           `📅 ${parsed.date}\n` +
           `🏷️ ${parsed.category || 'Outros'}`;
 
-        if (senderNumber) await sendWhatsAppReply(senderNumber, replyMsg);
+        if (senderNumber) await sendMessage(senderNumber, replyMsg);
 
-        // Verifica e envia alertas automáticos (fire-and-forget, não bloqueia resposta)
         if (owner && parsed.type === 'expense') {
           const ownerPhone = owner === 'luan' ? process.env.LUAN_PHONE : process.env.BARBARA_PHONE;
-          checkAndSendAlerts(db, owner, ownerPhone).catch(e =>
+          checkAndSendAlerts(owner, ownerPhone).catch(e =>
             console.error('[alerts] Erro ao verificar alertas:', e.message)
           );
         }
       }
 
     } catch (err) {
-      status = 'error';
+      status   = 'error';
       errorMsg = err.message;
       console.error('Erro ao processar mensagem WhatsApp:', err);
       if (senderNumber) {
-        await sendWhatsAppReply(senderNumber, '❌ Não entendi a mensagem. Tente: "almoço 35" ou "uber 15,50 ontem"');
+        await sendMessage(senderNumber, '❌ Não entendi a mensagem. Tente: "almoço 35" ou "uber 15,50 ontem"');
       }
     }
 
-    const logsRow = db.prepare(`SELECT value FROM settings WHERE key='whatsapp_logs'`).get();
-    const logs = logsRow ? JSON.parse(logsRow.value) : [];
-    logs.unshift({
-      id: Date.now(), text: messageText, sender: senderNumber || 'desconhecido',
-      receivedAt, status, error: errorMsg, parsed: parsed || null, owner,
-    });
-    db.prepare(`INSERT INTO settings (key,value) VALUES ('whatsapp_logs',?) ON CONFLICT(key) DO UPDATE SET value=excluded.value`).run(JSON.stringify(logs.slice(0, 100)));
-
+    await _saveLogs(messageText, senderNumber, receivedAt, status, errorMsg, parsed || null, owner, null);
     res.json({ status, message: 'Webhook processado' });
+
   } catch (err) {
     console.error('Erro no webhook WhatsApp:', err);
     res.status(500).json({ error: err.message });
   }
 });
 
+async function _saveLogs(text, sender, receivedAt, status, error, parsed, owner, duplicateOf) {
+  const { rows } = await query(`SELECT value FROM settings WHERE key='whatsapp_logs'`);
+  const logs = rows[0] ? JSON.parse(rows[0].value) : [];
+  logs.unshift({
+    id: Date.now(), text, sender: sender || 'desconhecido',
+    receivedAt, status, error, parsed: parsed || null, owner, duplicateOf: duplicateOf || null,
+  });
+  await query(
+    `INSERT INTO settings (key, value) VALUES ('whatsapp_logs', ?)
+     ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value`,
+    [JSON.stringify(logs.slice(0, 100))]
+  );
+}
+
 // GET /api/webhook/whatsapp/logs
-router.get('/whatsapp/logs', (_req, res) => {
+router.get('/whatsapp/logs', async (_req, res) => {
   try {
-    const row = db.prepare(`SELECT value FROM settings WHERE key='whatsapp_logs'`).get();
-    res.json(row ? JSON.parse(row.value) : []);
-  } catch (err) { res.status(500).json({ error: err.message }); }
+    const { rows } = await query(`SELECT value FROM settings WHERE key='whatsapp_logs'`);
+    res.json(rows[0] ? JSON.parse(rows[0].value) : []);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
 });
 
 // GET /api/webhook/whatsapp/stats
-router.get('/whatsapp/stats', (_req, res) => {
+router.get('/whatsapp/stats', async (_req, res) => {
   try {
-    const today = new Date().toISOString().slice(0, 10);
+    const today      = new Date().toISOString().slice(0, 10);
     const monthStart = today.slice(0, 7) + '-01';
-    const todayCount = db.prepare(`SELECT COUNT(*) as c FROM transactions WHERE origin='whatsapp' AND date=?`).get(today);
-    const monthCount = db.prepare(`SELECT COUNT(*) as c FROM transactions WHERE origin='whatsapp' AND date>=?`).get(monthStart);
-    const totalCount = db.prepare(`SELECT COUNT(*) as c FROM transactions WHERE origin='whatsapp'`).get();
-    res.json({ today: todayCount.c, thisMonth: monthCount.c, total: totalCount.c });
-  } catch (err) { res.status(500).json({ error: err.message }); }
+    const [
+      { rows: [todayCount] },
+      { rows: [monthCount] },
+      { rows: [totalCount] },
+    ] = await Promise.all([
+      query(`SELECT COUNT(*) as c FROM transactions WHERE origin='whatsapp' AND date=?`,  [today]),
+      query(`SELECT COUNT(*) as c FROM transactions WHERE origin='whatsapp' AND date>=?`, [monthStart]),
+      query(`SELECT COUNT(*) as c FROM transactions WHERE origin='whatsapp'`),
+    ]);
+    res.json({ today: Number(todayCount.c), thisMonth: Number(monthCount.c), total: Number(totalCount.c) });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
 });
 
 module.exports = router;

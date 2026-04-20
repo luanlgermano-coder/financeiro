@@ -1,9 +1,5 @@
-/**
- * Utilitários de detecção de duplicatas e geração de hash.
- * Usados por transactions, whatsapp e upload routes.
- */
+const { query } = require('../db/database-pg');
 
-/** Remove acentos, pontuação e normaliza para minúsculas */
 function normalizeText(text) {
   return String(text || '')
     .toLowerCase()
@@ -14,14 +10,12 @@ function normalizeText(text) {
     .trim();
 }
 
-/** Gera hash identificador de uma transação */
 function makeHash(description, amount, date) {
   const desc = normalizeText(description).replace(/\s/g, '');
   const amt  = parseFloat(amount).toFixed(2);
   return `${desc}|${amt}|${date}`;
 }
 
-/** Similaridade de Jaccard sobre palavras com ≥ 3 caracteres */
 function wordSimilarity(a, b) {
   const words = (s) => new Set(s.split(' ').filter(w => w.length >= 3));
   const wa = words(a);
@@ -33,22 +27,17 @@ function wordSimilarity(a, b) {
   return intersection / union;
 }
 
-/**
- * Procura no banco uma transação provavelmente duplicada.
- * Critérios: mesmo valor (±0,01), data até 2 dias de diferença,
- * e (descrição similar ≥ 40% Jaccard OU mesma categoria).
- *
- * @returns {object|null} Transação existente, ou null se não encontrou.
- */
-function findDuplicate(db, { amount, date, description, category_id }) {
+async function findDuplicate({ amount, date, description, category_id }) {
   const amt = parseFloat(amount);
 
-  const candidates = db.prepare(`
-    SELECT id, description, amount, date, type, category_id
-    FROM transactions
-    WHERE ABS(amount - ?) <= 0.01
-      AND ABS(julianday(date) - julianday(?)) <= 2
-  `).all(amt, date);
+  // PostgreSQL: compare TEXT dates cast to date type (±2 days)
+  const { rows: candidates } = await query(
+    `SELECT id, description, amount, date, type, category_id
+     FROM transactions
+     WHERE ABS(amount - ?) <= 0.01
+       AND date::date BETWEEN (?::date - INTERVAL '2 days') AND (?::date + INTERVAL '2 days')`,
+    [amt, date, date]
+  );
 
   if (!candidates.length) return null;
 

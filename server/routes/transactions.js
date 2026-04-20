@@ -1,9 +1,8 @@
 const express = require('express');
 const router = express.Router();
-const db = require('../db/database');
+const { query, withTransaction } = require('../db/database-pg');
 const { makeHash, findDuplicate } = require('../utils/duplicates');
 
-// Avança N meses em uma data string "YYYY-MM-DD", respeitando o último dia do mês
 function addMonths(dateStr, n) {
   const [y, m, d] = dateStr.split('-').map(Number);
   const totalMonths = (y * 12 + (m - 1)) + n;
@@ -28,47 +27,48 @@ const SELECT_FULL = `
 `;
 
 // GET /api/transactions/check-duplicate
-router.get('/check-duplicate', (req, res) => {
+router.get('/check-duplicate', async (req, res) => {
   try {
     const { amount, date, description, category_id } = req.query;
     if (!amount || !date || !description) {
       return res.status(400).json({ error: 'amount, date e description são obrigatórios' });
     }
-    const match = findDuplicate(db, { amount, date, description, category_id });
+    const match = await findDuplicate({ amount, date, description, category_id });
     if (!match) return res.json({ isDuplicate: false });
-    const full = db.prepare(`${SELECT_FULL} WHERE t.id = ?`).get(match.id);
-    res.json({ isDuplicate: true, existing: full });
+    const { rows } = await query(`${SELECT_FULL} WHERE t.id = ?`, [match.id]);
+    res.json({ isDuplicate: true, existing: rows[0] });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
 });
 
-// GET /api/transactions?month&category_id&type&origin&owner
-router.get('/', (req, res) => {
+// GET /api/transactions
+router.get('/', async (req, res) => {
   try {
     const { month, category_id, type, origin, owner } = req.query;
-    let query = SELECT_FULL + ' WHERE 1=1';
+    let sql = `${SELECT_FULL} WHERE 1=1`;
     const params = [];
 
     if (month) {
       const [year, mon] = month.split('-');
-      query += ' AND t.date BETWEEN ? AND ?';
+      sql += ' AND t.date BETWEEN ? AND ?';
       params.push(`${year}-${mon}-01`, `${year}-${mon}-31`);
     }
-    if (category_id) { query += ' AND t.category_id = ?'; params.push(category_id); }
-    if (type)        { query += ' AND t.type = ?';        params.push(type); }
-    if (origin)      { query += ' AND t.origin = ?';      params.push(origin); }
-    if (owner)       { query += ' AND t.owner = ?';       params.push(owner); }
+    if (category_id) { sql += ' AND t.category_id = ?'; params.push(category_id); }
+    if (type)        { sql += ' AND t.type = ?';        params.push(type); }
+    if (origin)      { sql += ' AND t.origin = ?';      params.push(origin); }
+    if (owner)       { sql += ' AND t.owner = ?';       params.push(owner); }
 
-    query += ' ORDER BY t.date DESC, t.created_at DESC';
-    res.json(db.prepare(query).all(...params));
+    sql += ' ORDER BY t.date DESC, t.created_at DESC';
+    const { rows } = await query(sql, params);
+    res.json(rows);
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
 });
 
-// POST /api/transactions/installments — cria N parcelas a partir de uma compra parcelada
-router.post('/installments', (req, res) => {
+// POST /api/transactions/installments
+router.post('/installments', async (req, res) => {
   try {
     const { description, total_amount, installments, date, category_id, card_id, owner, notes } = req.body;
     if (!description || !total_amount || !installments || !date) {
@@ -78,9 +78,8 @@ router.post('/installments', (req, res) => {
     if (n < 2 || n > 24) return res.status(400).json({ error: 'installments deve ser entre 2 e 24' });
 
     const total = parseFloat(total_amount);
-    // Distribui o valor: parcelas iguais, última recebe o centavo restante
-    const unit = parseFloat((total / n).toFixed(2));
-    const last = parseFloat((total - unit * (n - 1)).toFixed(2));
+    const unit  = parseFloat((total / n).toFixed(2));
+    const last  = parseFloat((total - unit * (n - 1)).toFixed(2));
 
     const created = [];
     for (let i = 1; i <= n; i++) {
@@ -88,11 +87,12 @@ router.post('/installments', (req, res) => {
       const installDate = addMonths(date, i - 1);
       const desc        = `${description} (${i}/${n})`;
       const hash        = makeHash(desc, amount, installDate);
-      const result = db.prepare(`
-        INSERT INTO transactions (description, amount, date, type, category_id, card_id, origin, notes, hash, owner, installment_current, installment_total)
-        VALUES (?, ?, ?, 'expense', ?, ?, 'manual', ?, ?, ?, ?, ?)
-      `).run(desc, amount, installDate, category_id || null, card_id || null, notes || null, hash, owner || null, i, n);
-      created.push({ id: result.lastInsertRowid, description: desc, amount, date: installDate });
+      const { rows } = await query(
+        `INSERT INTO transactions (description, amount, date, type, category_id, card_id, origin, notes, hash, owner, installment_current, installment_total)
+         VALUES (?, ?, ?, 'expense', ?, ?, 'manual', ?, ?, ?, ?, ?) RETURNING id`,
+        [desc, amount, installDate, category_id || null, card_id || null, notes || null, hash, owner || null, i, n]
+      );
+      created.push({ id: rows[0].id, description: desc, amount, date: installDate });
     }
 
     res.status(201).json({ installments: n, total, unit, last, created });
@@ -102,81 +102,75 @@ router.post('/installments', (req, res) => {
 });
 
 // POST /api/transactions
-router.post('/', (req, res) => {
+router.post('/', async (req, res) => {
   try {
     const { description, amount, date, type, category_id, card_id, origin, notes, owner } = req.body;
     if (!description || !amount || !date || !type) {
       return res.status(400).json({ error: 'Campos obrigatórios: description, amount, date, type' });
     }
     const hash = makeHash(description, amount, date);
-    const result = db.prepare(`
-      INSERT INTO transactions (description, amount, date, type, category_id, card_id, origin, notes, hash, owner)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `).run(
-      description, parseFloat(amount), date, type,
-      category_id || null, card_id || null,
-      origin || 'manual', notes || null, hash, owner || null
+    const { rows: [ins] } = await query(
+      `INSERT INTO transactions (description, amount, date, type, category_id, card_id, origin, notes, hash, owner)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?) RETURNING id`,
+      [description, parseFloat(amount), date, type,
+       category_id || null, card_id || null, origin || 'manual', notes || null, hash, owner || null]
     );
-    res.status(201).json(db.prepare(`${SELECT_FULL} WHERE t.id = ?`).get(result.lastInsertRowid));
+    const { rows } = await query(`${SELECT_FULL} WHERE t.id = ?`, [ins.id]);
+    res.status(201).json(rows[0]);
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
 });
 
 // PUT /api/transactions/:id
-router.put('/:id', (req, res) => {
+router.put('/:id', async (req, res) => {
   try {
     const { description, amount, date, type, category_id, card_id, notes, owner } = req.body;
     const hash = makeHash(description, amount, date);
-    db.prepare(`
-      UPDATE transactions
-      SET description=?, amount=?, date=?, type=?, category_id=?, card_id=?, notes=?, hash=?, owner=?
-      WHERE id=?
-    `).run(
-      description, parseFloat(amount), date, type,
-      category_id || null, card_id || null,
-      notes || null, hash, owner || null,
-      req.params.id
+    await query(
+      `UPDATE transactions SET description=?, amount=?, date=?, type=?, category_id=?, card_id=?, notes=?, hash=?, owner=? WHERE id=?`,
+      [description, parseFloat(amount), date, type,
+       category_id || null, card_id || null, notes || null, hash, owner || null, req.params.id]
     );
-    res.json(db.prepare(`${SELECT_FULL} WHERE t.id = ?`).get(req.params.id));
+    const { rows } = await query(`${SELECT_FULL} WHERE t.id = ?`, [req.params.id]);
+    res.json(rows[0]);
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
 });
 
-// DELETE /api/transactions/month — apaga transactions do mês atual
-router.delete('/month', (req, res) => {
+// DELETE /api/transactions/month
+router.delete('/month', async (req, res) => {
   try {
     const month = new Date().toISOString().slice(0, 7);
-    const start = `${month}-01`;
-    const end   = `${month}-31`;
-    const result = db.prepare(`DELETE FROM transactions WHERE date BETWEEN ? AND ?`).run(start, end);
-    db._persist();
-    res.json({ ok: true, deleted: result.changes });
+    const { rowCount } = await query(
+      `DELETE FROM transactions WHERE date BETWEEN ? AND ?`,
+      [`${month}-01`, `${month}-31`]
+    );
+    res.json({ ok: true, deleted: rowCount });
   } catch (err) {
-    console.error('reset-month error:', err);
     res.status(500).json({ error: err.message });
   }
 });
 
-// DELETE /api/transactions/all — apaga todas as transactions, debts e subscriptions
-// (reset de dados de teste). Preserva categories e cards.
-router.delete('/all', (req, res) => {
+// DELETE /api/transactions/all
+router.delete('/all', async (req, res) => {
   try {
-    // Usa exec() para rodar os 3 DELETEs atomicamente sem _persist() intermediário
-    db.exec('DELETE FROM transactions; DELETE FROM debts; DELETE FROM subscriptions;');
-    db._persist();
+    await withTransaction(async (tq) => {
+      await tq(`DELETE FROM transactions`);
+      await tq(`DELETE FROM debts`);
+      await tq(`DELETE FROM subscriptions`);
+    });
     res.json({ ok: true, deleted: { transactions: true, debts: true, subscriptions: true } });
   } catch (err) {
-    console.error('reset-data error:', err);
     res.status(500).json({ error: err.message });
   }
 });
 
 // DELETE /api/transactions/:id
-router.delete('/:id', (req, res) => {
+router.delete('/:id', async (req, res) => {
   try {
-    db.prepare(`DELETE FROM transactions WHERE id = ?`).run(req.params.id);
+    await query(`DELETE FROM transactions WHERE id = ?`, [req.params.id]);
     res.json({ success: true });
   } catch (err) {
     res.status(500).json({ error: err.message });

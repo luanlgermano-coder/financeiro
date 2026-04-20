@@ -2,9 +2,9 @@ require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
 const path = require('path');
-const { initialize: initDB } = require('./db/database');
+const { initialize: initDB } = require('./db/database-pg');
 
-// Carrega node-cron apenas se disponível (não quebra se não instalado)
+// Load node-cron only if available
 let cron;
 try { cron = require('node-cron'); } catch (_) { /* ignorado */ }
 
@@ -14,17 +14,15 @@ app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ extended: true, limit: '50mb' }));
 
 async function start() {
-  // Initialize database FIRST — routes are registered after it resolves
   await initDB();
-  console.log('✅ Banco de dados inicializado');
+  console.log('✅ Banco de dados PostgreSQL inicializado');
 
-  // Auth (sem proteção — é a própria rota de login)
+  // Auth (unprotected — this IS the login route)
   app.use('/api/auth', require('./routes/auth'));
 
-  // Protege todas as rotas /api/* a partir daqui
+  // Protect all /api/* routes after this point
   app.use('/api', require('./middleware/auth'));
 
-  // API Routes (registered after DB is ready)
   app.use('/api/dashboard',     require('./routes/dashboard'));
   app.use('/api/transactions',  require('./routes/transactions'));
   app.use('/api/categories',    require('./routes/categories'));
@@ -37,7 +35,6 @@ async function start() {
   app.use('/api/goals',         require('./routes/goals'));
   app.use('/api/reports',       require('./routes/reports'));
 
-  // Serve frontend estático em produção
   if (process.env.NODE_ENV === 'production') {
     const distPath = path.join(__dirname, '../client/dist');
     app.use(express.static(distPath));
@@ -52,7 +49,6 @@ async function start() {
     console.log(`📦 Ambiente: ${process.env.NODE_ENV || 'development'}`);
   });
 
-  // Cron job: todo dia 1 do mês às 8h — envia relatório mensal
   if (cron) {
     cron.schedule('0 8 1 * *', async () => {
       console.log('[cron] Enviando relatório mensal do mês anterior…');
@@ -61,8 +57,8 @@ async function start() {
         const { sendToFamily } = require('./services/whatsapp.service');
         const d = new Date();
         d.setMonth(d.getMonth() - 1);
-        const month = d.toISOString().slice(0, 7);
-        const report = buildReport(month);
+        const month  = d.toISOString().slice(0, 7);
+        const report = await buildReport(month);
         await sendToFamily(report, 'both');
         console.log('[cron] Relatório enviado com sucesso.');
       } catch (err) {
