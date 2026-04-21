@@ -73,8 +73,9 @@ export default function Configuracoes() {
 
   // — cards —
   const [cards, setCards]             = useState([]);
-  const [cardDueDays, setCardDueDays] = useState({});   // { id: '' | number }
-  const [savingCard, setSavingCard]   = useState(null); // card id being saved
+  const [cardDueDays, setCardDueDays] = useState({});
+  const [cardOwners,  setCardOwners]  = useState({});
+  const [savingCard, setSavingCard]   = useState(null);
 
   // — bills —
   const [bills, setBills]         = useState([]);
@@ -93,6 +94,7 @@ export default function Configuracoes() {
     getCards().then(r => {
       setCards(r.data);
       setCardDueDays(Object.fromEntries(r.data.map(c => [c.id, c.due_day ?? ''])));
+      setCardOwners(Object.fromEntries(r.data.map(c => [c.id, c.owner ?? ''])));
     }).catch(() => {});
     getBills().then(r => setBills(r.data)).catch(() => {});
   }, []);
@@ -129,12 +131,13 @@ export default function Configuracoes() {
   };
 
   // ── Cards ──
-  const handleSaveCardDueDay = async (card) => {
+  const handleSaveCard = async (card) => {
     setSavingCard(card.id);
     try {
       const due_day = cardDueDays[card.id] !== '' ? parseInt(cardDueDays[card.id]) : null;
-      await updateCard(card.id, { name: card.name, color: card.color, due_day });
-      flash('Dia de vencimento salvo.');
+      const owner   = cardOwners[card.id]  || null;
+      await updateCard(card.id, { name: card.name, color: card.color, due_day, owner });
+      flash('Cartão salvo.');
     } catch (err) { flash('Erro ao salvar cartão.', true); }
     finally { setSavingCard(null); }
   };
@@ -235,27 +238,37 @@ export default function Configuracoes() {
         ) : (
           <div className="space-y-3">
             {cards.map(card => {
-              const original = card.due_day ?? '';
-              const current  = cardDueDays[card.id] ?? '';
-              const changed  = String(current) !== String(original);
+              const origDay   = String(card.due_day ?? '');
+              const origOwner = card.owner ?? '';
+              const curDay    = String(cardDueDays[card.id] ?? '');
+              const curOwner  = cardOwners[card.id] ?? '';
+              const changed   = curDay !== origDay || curOwner !== origOwner;
               return (
-                <div key={card.id} className="flex items-center gap-3">
+                <div key={card.id} className="flex items-center gap-2 flex-wrap sm:flex-nowrap">
                   <div
                     className="w-4 h-4 rounded-full flex-shrink-0"
                     style={{ backgroundColor: card.color }}
                   />
-                  <span className="text-sm text-zinc-700 flex-1 truncate">{card.name}</span>
+                  <span className="text-sm text-zinc-700 flex-1 min-w-[80px] truncate">{card.name}</span>
+                  <select
+                    value={curOwner}
+                    onChange={e => setCardOwners(prev => ({ ...prev, [card.id]: e.target.value }))}
+                    className="w-28 px-2 py-1.5 border border-zinc-300 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-400"
+                  >
+                    <option value="">Dono</option>
+                    {OWNER_OPTS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+                  </select>
                   <input
                     type="number"
                     min="1"
                     max="31"
                     placeholder="Dia"
-                    value={current}
+                    value={curDay}
                     onChange={e => setCardDueDays(prev => ({ ...prev, [card.id]: e.target.value }))}
-                    className="w-20 px-2 py-1.5 border border-zinc-300 rounded-lg text-sm text-center focus:outline-none focus:ring-2 focus:ring-blue-400"
+                    className="w-16 px-2 py-1.5 border border-zinc-300 rounded-lg text-sm text-center focus:outline-none focus:ring-2 focus:ring-blue-400"
                   />
                   <button
-                    onClick={() => handleSaveCardDueDay(card)}
+                    onClick={() => handleSaveCard(card)}
                     disabled={!changed || savingCard === card.id}
                     className="px-3 py-1.5 text-xs font-semibold rounded-lg transition-colors disabled:opacity-40 bg-blue-500 hover:bg-blue-600 text-white disabled:bg-zinc-200 disabled:text-zinc-400"
                   >

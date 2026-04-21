@@ -45,6 +45,7 @@ router.get('/', async (req, res) => {
         name:    c.name,
         color:   c.color,
         due_day: c.due_day,
+        owner:   c.owner,
         amount:  spendMap[c.id] || 0,
         checked: checkedSet.has(`card-${c.id}`),
       })),

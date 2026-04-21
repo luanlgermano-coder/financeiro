@@ -508,7 +508,7 @@ export default function Overview() {
                             cartão
                           </span>
                         )}
-                        {item.type === 'bill' && ownerLabel && (
+                        {item.owner && (
                           <span className={`text-xs font-medium px-1.5 py-0.5 rounded-md flex-shrink-0 ${OWNER_COLOR[item.owner] || OWNER_COLOR.casal}`}>
                             {ownerLabel}
                           </span>
