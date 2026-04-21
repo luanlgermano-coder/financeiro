@@ -8,28 +8,119 @@
 }
 
 @layer base {
-  * {
-    box-sizing: border-box;
-  }
+  * { box-sizing: border-box; }
   body {
-    @apply bg-zinc-100 text-zinc-900;
+    background-color: #0f1117;
+    color: #e6edf3;
     font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
   }
 }
 
 @layer utilities {
-  .page-fade-in {
-    animation: page-fade-in 0.18s ease-out both;
-  }
-  .scrollbar-thin {
-    scrollbar-width: thin;
-    scrollbar-color: #3f3f46 transparent;
-  }
-  .scrollbar-thin::-webkit-scrollbar {
-    width: 4px;
-  }
-  .scrollbar-thin::-webkit-scrollbar-thumb {
-    background-color: #3f3f46;
-    border-radius: 2px;
-  }
+  .page-fade-in { animation: page-fade-in 0.18s ease-out both; }
 }
+
+/* ══════════════════════════════════════════════════════════
+   DARK MODE — global overrides (after @tailwind utilities
+   so they win over utility classes)
+══════════════════════════════════════════════════════════ */
+
+/* ── Neutral backgrounds ── */
+.bg-white         { background-color: #161b22 !important; }
+.bg-zinc-50       { background-color: #0d1117 !important; }
+.bg-zinc-100      { background-color: #21262d !important; }
+.bg-zinc-200      { background-color: #30363d !important; }
+.bg-zinc-50\/70   { background-color: rgba(13,17,23,0.8) !important; }
+
+/* ── Neutral bg hover ── */
+.hover\:bg-white:hover       { background-color: #1c2128 !important; }
+.hover\:bg-zinc-50:hover     { background-color: #1c2128 !important; }
+.hover\:bg-zinc-100:hover    { background-color: #30363d !important; }
+
+/* ── Neutral text ── */
+.text-zinc-900 { color: #e6edf3 !important; }
+.text-zinc-800 { color: #e6edf3 !important; }
+.text-zinc-700 { color: #c9d1d9 !important; }
+.text-zinc-600 { color: #8b949e !important; }
+.text-zinc-500 { color: #8b949e !important; }
+.text-zinc-400 { color: #6e7681 !important; }
+
+/* hover text */
+.hover\:text-zinc-600:hover { color: #c9d1d9 !important; }
+.hover\:text-zinc-700:hover { color: #e6edf3 !important; }
+.hover\:text-zinc-800:hover { color: #e6edf3 !important; }
+
+/* ── Neutral borders ── */
+.border-zinc-100 { border-color: #21262d !important; }
+.border-zinc-200 { border-color: #30363d !important; }
+.border-zinc-300 { border-color: #444c56 !important; }
+.border-zinc-400 { border-color: #444c56 !important; }
+
+/* ── Divide lines ── */
+.divide-zinc-50  > :not([hidden]) ~ :not([hidden]) { border-color: #21262d !important; }
+.divide-zinc-100 > :not([hidden]) ~ :not([hidden]) { border-color: #21262d !important; }
+
+/* ── Color backgrounds → dark tints ── */
+.bg-red-50,    .bg-red-100    { background-color: rgba(240,105,92,0.10) !important; }
+.bg-amber-50,  .bg-amber-100  { background-color: rgba(240,160,48,0.10) !important; }
+.bg-emerald-50,.bg-emerald-100{ background-color: rgba(88,214,141,0.10) !important; }
+.bg-blue-50,   .bg-blue-100   { background-color: rgba(121,184,255,0.10) !important; }
+.bg-pink-50,   .bg-pink-100   { background-color: rgba(244,114,182,0.10) !important; }
+.bg-violet-50, .bg-violet-100 { background-color: rgba(167,139,250,0.10) !important; }
+.bg-teal-50,   .bg-teal-100   { background-color: rgba(45,212,191,0.10) !important; }
+.bg-sky-50,    .bg-sky-100    { background-color: rgba(56,189,248,0.10) !important; }
+
+/* hover color bg */
+.hover\:bg-red-50:hover    { background-color: rgba(240,105,92,0.15) !important; }
+.hover\:bg-emerald-100:hover { background-color: rgba(88,214,141,0.15) !important; }
+.hover\:bg-blue-50\/40:hover { background-color: rgba(121,184,255,0.08) !important; }
+
+/* ── Color borders → muted ── */
+.border-red-100,    .border-red-200    { border-color: rgba(240,105,92,0.30) !important; }
+.border-amber-100,  .border-amber-200, .border-amber-300 { border-color: rgba(240,160,48,0.30) !important; }
+.border-emerald-100,.border-emerald-200{ border-color: rgba(88,214,141,0.30) !important; }
+.border-blue-100,   .border-blue-200   { border-color: rgba(121,184,255,0.30) !important; }
+.border-pink-100,   .border-pink-200   { border-color: rgba(244,114,182,0.30) !important; }
+.border-violet-100, .border-violet-200 { border-color: rgba(167,139,250,0.30) !important; }
+.border-red-100 { border-color: rgba(240,105,92,0.25) !important; }
+
+/* ── Color text → brighter for dark bg ── */
+.text-red-600,    .text-red-700,    .text-red-800    { color: #f0695c !important; }
+.text-amber-600,  .text-amber-700,  .text-amber-800  { color: #f0a030 !important; }
+.text-emerald-600,.text-emerald-700,.text-emerald-800 { color: #58d68d !important; }
+.text-blue-600,   .text-blue-700                     { color: #79b8ff !important; }
+.text-pink-600,   .text-pink-700                     { color: #ff7eb6 !important; }
+.text-violet-600, .text-violet-700                   { color: #c084fc !important; }
+.text-teal-600,   .text-teal-700                     { color: #2dd4bf !important; }
+.text-sky-600,    .text-sky-700                      { color: #7dd3fc !important; }
+
+/* hover text color */
+.hover\:text-emerald-700:hover { color: #4ade80 !important; }
+.hover\:text-red-500:hover     { color: #f0695c !important; }
+
+/* ── Inputs, selects, textareas ── */
+input:not([type=checkbox]):not([type=radio]):not([type=range]):not([type=color]),
+select,
+textarea {
+  background-color: #0d1117 !important;
+  color: #e6edf3 !important;
+  border-color: #30363d !important;
+}
+input::placeholder,
+textarea::placeholder { color: #6e7681 !important; }
+select option         { background-color: #161b22; color: #e6edf3; }
+
+/* ── Shadows → deeper for dark ── */
+.shadow-sm  { box-shadow: 0 1px 3px rgba(0,0,0,0.5) !important; }
+.shadow-md  { box-shadow: 0 4px 8px  rgba(0,0,0,0.5) !important; }
+.shadow-lg  { box-shadow: 0 8px 16px rgba(0,0,0,0.6) !important; }
+.shadow-xl  { box-shadow: 0 12px 24px rgba(0,0,0,0.7) !important; }
+.shadow-2xl { box-shadow: 0 16px 32px rgba(0,0,0,0.8) !important; }
+.hover\:shadow-md:hover { box-shadow: 0 4px 8px rgba(0,0,0,0.5) !important; }
+.hover\:shadow-lg:hover { box-shadow: 0 8px 16px rgba(0,0,0,0.5) !important; }
+
+/* ── Scrollbar global ── */
+::-webkit-scrollbar       { width: 4px; height: 4px; }
+::-webkit-scrollbar-track { background: #0f1117; }
+::-webkit-scrollbar-thumb { background: #30363d; border-radius: 2px; }
+* { scrollbar-width: thin; scrollbar-color: #30363d transparent; }
