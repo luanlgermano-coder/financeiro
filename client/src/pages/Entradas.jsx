@@ -229,9 +229,9 @@ export default function Entradas({ owner }) {
                           <span className={theme.text}>+{formatCurrency(t.amount)}</span>
                         </td>
                         <td className="px-4 py-3">
-                          <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                            <button onClick={() => setEditTarget(t)} className="p-1.5 rounded-lg hover:bg-zinc-100 text-zinc-400 hover:text-zinc-600"><Pencil size={13} /></button>
-                            <button onClick={() => handleDelete(t.id)} className="p-1.5 rounded-lg hover:bg-red-50 text-zinc-400 hover:text-red-500"><Trash2 size={13} /></button>
+                          <div className="flex gap-1">
+                            <button onClick={() => setEditTarget(t)} className="p-1.5 rounded-lg hover:bg-zinc-100 text-zinc-400 hover:text-zinc-600 transition-colors"><Pencil size={13} /></button>
+                            <button onClick={() => handleDelete(t.id)} className="p-1.5 rounded-lg hover:bg-red-50 text-zinc-400 hover:text-red-500 transition-colors"><Trash2 size={13} /></button>
                           </div>
                         </td>
                       </tr>

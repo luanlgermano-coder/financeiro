@@ -8,7 +8,8 @@ router.get('/', async (req, res) => {
     const month = req.query.month || new Date().toISOString().slice(0, 7);
     const [year, mon] = month.split('-');
     const startDate = `${year}-${mon}-01`;
-    const endDate   = `${year}-${mon}-31`;
+    const lastDay   = new Date(parseInt(year), parseInt(mon), 0).getDate();
+    const endDate   = `${year}-${mon}-${String(lastDay).padStart(2, '0')}`;
 
     const [
       { rows: [incomeRow]  },
@@ -33,8 +34,9 @@ router.get('/', async (req, res) => {
     const prevDate  = new Date(parseInt(year), parseInt(mon) - 2, 1);
     const prevY     = prevDate.getFullYear();
     const prevM     = String(prevDate.getMonth() + 1).padStart(2, '0');
+    const prevLastDay = new Date(prevY, parseInt(prevM), 0).getDate();
     const prevStart = `${prevY}-${prevM}-01`;
-    const prevEnd   = `${prevY}-${prevM}-31`;
+    const prevEnd   = `${prevY}-${prevM}-${String(prevLastDay).padStart(2, '0')}`;
 
     const [
       { rows: [prevIncomeRow]  },
@@ -76,7 +78,8 @@ router.get('/', async (req, res) => {
       const d = new Date(parseInt(year), parseInt(mon) - 1 - i, 1);
       const y = d.getFullYear();
       const m = String(d.getMonth() + 1).padStart(2, '0');
-      const s = `${y}-${m}-01`, e = `${y}-${m}-31`;
+      const ld = new Date(y, d.getMonth() + 1, 0).getDate();
+      const s = `${y}-${m}-01`, e = `${y}-${m}-${String(ld).padStart(2, '0')}`;
       const monthLabel = d.toLocaleString('pt-BR', { month: 'short' });
       const { rows: [ev] } = await query(`
         SELECT
@@ -119,7 +122,7 @@ router.get('/', async (req, res) => {
       const d = new Date(parseInt(year), parseInt(mon) - 1 - i, 1);
       const y = d.getFullYear();
       const m = String(d.getMonth() + 1).padStart(2, '0');
-      const monthEnd   = `${y}-${m}-31`;
+      const monthEnd   = `${y}-${m}-${String(new Date(y, d.getMonth() + 1, 0).getDate()).padStart(2, '0')}`;
       const monthLabel = d.toLocaleString('pt-BR', { month: 'short' });
       const { rows: [paidAfterRow] } = await query(
         `SELECT COALESCE(SUM(amount),0) as total FROM debt_payments WHERE date > ?`,

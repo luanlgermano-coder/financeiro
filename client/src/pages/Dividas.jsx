@@ -4,7 +4,7 @@ import { getDebts, createDebt, updateDebt, deleteDebt, registerDebtPayment } fro
 import { formatCurrency } from '../utils/formatters';
 import Modal from '../components/Modal';
 
-const initialForm = { name: '', total_amount: '', monthly_payment: '', paid_amount: '0' };
+const initialForm = { name: '', total_amount: '', monthly_payment: '', paid_amount: '0', due_day: '' };
 
 function DebtForm({ initial, onSubmit, onCancel, loading }) {
   const [form, setForm] = useState(initial || initialForm);
@@ -47,17 +47,31 @@ function DebtForm({ initial, onSubmit, onCancel, loading }) {
           />
         </div>
       </div>
-      <div>
-        <label className="block text-sm font-medium text-zinc-700 mb-1">Parcela mensal (R$) *</label>
-        <input
-          type="number"
-          step="0.01"
-          min="0"
-          value={form.monthly_payment}
-          onChange={e => setForm(f => ({ ...f, monthly_payment: e.target.value }))}
-          placeholder="0,00"
-          className="w-full px-3 py-2 border border-zinc-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"
-        />
+      <div className="grid grid-cols-2 gap-3">
+        <div>
+          <label className="block text-sm font-medium text-zinc-700 mb-1">Parcela mensal (R$) *</label>
+          <input
+            type="number"
+            step="0.01"
+            min="0"
+            value={form.monthly_payment}
+            onChange={e => setForm(f => ({ ...f, monthly_payment: e.target.value }))}
+            placeholder="0,00"
+            className="w-full px-3 py-2 border border-zinc-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"
+          />
+        </div>
+        <div>
+          <label className="block text-sm font-medium text-zinc-700 mb-1">Dia de vencimento</label>
+          <input
+            type="number"
+            min="1"
+            max="31"
+            value={form.due_day}
+            onChange={e => setForm(f => ({ ...f, due_day: e.target.value }))}
+            placeholder="Ex: 15"
+            className="w-full px-3 py-2 border border-zinc-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"
+          />
+        </div>
       </div>
       <div className="flex gap-3 pt-2">
         <button type="button" onClick={onCancel} className="flex-1 py-2.5 border border-zinc-300 text-zinc-700 rounded-lg text-sm font-medium hover:bg-zinc-50">
@@ -288,7 +302,7 @@ export default function Dividas() {
       {editTarget && (
         <Modal title="Editar Dívida" onClose={() => setEditTarget(null)}>
           <DebtForm
-            initial={{ name: editTarget.name, total_amount: String(editTarget.total_amount), monthly_payment: String(editTarget.monthly_payment), paid_amount: String(editTarget.paid_amount) }}
+            initial={{ name: editTarget.name, total_amount: String(editTarget.total_amount), monthly_payment: String(editTarget.monthly_payment), paid_amount: String(editTarget.paid_amount), due_day: editTarget.due_day != null ? String(editTarget.due_day) : '' }}
             onSubmit={handleUpdate}
             onCancel={() => setEditTarget(null)}
             loading={saving}

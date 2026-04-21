@@ -12,6 +12,7 @@ router.get('/', async (req, res) => {
       { rows: cardsWithDue },
       { rows: cardSpend },
       { rows: checks },
+      { rows: debtsWithDue },
     ] = await Promise.all([
       query(`SELECT * FROM bills WHERE active = 1 ORDER BY due_day`),
       query(`SELECT * FROM cards WHERE due_day IS NOT NULL ORDER BY due_day`),
@@ -23,6 +24,7 @@ router.get('/', async (req, res) => {
         [month + '%']
       ),
       query(`SELECT type, ref_id FROM due_checks WHERE month = ?`, [month]),
+      query(`SELECT * FROM debts WHERE total_amount > paid_amount AND due_day IS NOT NULL ORDER BY due_day`),
     ]);
 
     const spendMap = Object.fromEntries(cardSpend.map(r => [r.card_id, r.total]));
@@ -48,6 +50,15 @@ router.get('/', async (req, res) => {
         owner:   c.owner,
         amount:  spendMap[c.id] || 0,
         checked: checkedSet.has(`card-${c.id}`),
+      })),
+      ...debtsWithDue.map(d => ({
+        type:    'debt',
+        id:      d.id,
+        name:    d.name,
+        amount:  d.monthly_payment,
+        due_day: d.due_day,
+        owner:   d.owner,
+        checked: checkedSet.has(`debt-${d.id}`),
       })),
     ].sort((a, b) => a.due_day - b.due_day);
 

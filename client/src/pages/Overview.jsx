@@ -7,7 +7,7 @@ import {
   TrendingUp, TrendingDown, Landmark, Wallet,
   ArrowUpRight, ArrowDownRight, ChevronLeft, ChevronRight,
   ArrowUp, ArrowDown, AlertTriangle, CheckCircle2, Lightbulb, Target, CreditCard,
-  Eye, EyeOff, X, Calendar
+  Eye, EyeOff, X, Calendar, Banknote
 } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { getDashboard, getDues, checkDue, uncheckDue } from '../api';
@@ -508,6 +508,12 @@ export default function Overview() {
                             cartão
                           </span>
                         )}
+                        {item.type === 'debt' && (
+                          <span className="text-xs font-medium px-1.5 py-0.5 rounded-md bg-amber-100 text-amber-700 flex-shrink-0 flex items-center gap-0.5">
+                            <Banknote size={10} />
+                            dívida
+                          </span>
+                        )}
                         {item.owner && (
                           <span className={`text-xs font-medium px-1.5 py-0.5 rounded-md flex-shrink-0 ${OWNER_COLOR[item.owner] || OWNER_COLOR.casal}`}>
                             {ownerLabel}
@@ -515,6 +521,9 @@ export default function Overview() {
                         )}
                         {item.type === 'card' && (
                           <span className="text-xs text-zinc-400">Gasto no mês</span>
+                        )}
+                        {item.type === 'debt' && (
+                          <span className="text-xs text-zinc-400">Parcela mensal</span>
                         )}
                       </div>
                     </div>

@@ -10,7 +10,16 @@ const SELECT_WITH_CARD = `
 
 router.get('/', async (req, res) => {
   try {
+    const { month } = req.query;
     const { rows } = await query(`${SELECT_WITH_CARD} ORDER BY s.name`);
+    if (month) {
+      const { rows: checks } = await query(
+        `SELECT ref_id FROM due_checks WHERE type = 'subscription' AND month = ?`,
+        [month]
+      );
+      const checkedIds = new Set(checks.map(c => Number(c.ref_id)));
+      rows.forEach(s => { s.checked = checkedIds.has(s.id); });
+    }
     res.json(rows);
   } catch (err) {
     res.status(500).json({ error: err.message });

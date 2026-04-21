@@ -108,52 +108,49 @@ export default function Gastos() {
         </div>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Barras por categoria */}
-        <div className="bg-white rounded-2xl p-5 shadow-sm">
-          <h3 className="font-semibold text-zinc-900 mb-4">Por Categoria</h3>
-          {catList.length === 0
-            ? <p className="text-zinc-400 text-sm text-center py-8">Nenhum dado</p>
-            : <div className="space-y-3">{catList.map(c => <CategoryBar key={c.name} {...c} max={maxCat} />)}</div>
-          }
-        </div>
-
-        {/* Filtros */}
-        <div className="bg-white rounded-2xl p-5 shadow-sm">
-          <div className="flex items-center gap-2 mb-4">
-            <Filter size={16} className="text-zinc-400" />
-            <h3 className="font-semibold text-zinc-900">Filtrar por Categoria</h3>
-          </div>
-          <div className="flex flex-wrap gap-2">
-            <button
-              onClick={() => setFilterCategory('')}
-              className={`px-3 py-1.5 rounded-full text-xs font-medium transition-colors border ${
-                filterCategory === '' ? 'bg-zinc-900 text-white border-zinc-900' : 'bg-white text-zinc-600 border-zinc-300 hover:border-zinc-400'
-              }`}
-            >
-              Todas
-            </button>
-            {categories.map(c => (
-              <button
-                key={c.id}
-                onClick={() => setFilterCategory(String(c.id))}
-                className={`px-3 py-1.5 rounded-full text-xs font-medium transition-colors border flex items-center gap-1.5 ${
-                  filterCategory === String(c.id) ? 'text-white border-transparent' : 'bg-white text-zinc-600 border-zinc-300 hover:border-zinc-400'
-                }`}
-                style={filterCategory === String(c.id) ? { backgroundColor: c.color, borderColor: c.color } : {}}
-              >
-                <span className="w-2 h-2 rounded-full" style={{ backgroundColor: c.color }} />
-                {c.name}
-              </button>
-            ))}
-          </div>
-        </div>
+      {/* Barras por categoria */}
+      <div className="bg-white rounded-2xl p-5 shadow-sm">
+        <h3 className="font-semibold text-zinc-900 mb-4">Por Categoria</h3>
+        {catList.length === 0
+          ? <p className="text-zinc-400 text-sm text-center py-8">Nenhum dado</p>
+          : <div className="space-y-3">{catList.map(c => <CategoryBar key={c.name} {...c} max={maxCat} />)}</div>
+        }
       </div>
 
       {/* Lista de transações */}
       <div className="bg-white rounded-2xl shadow-sm overflow-hidden">
-        <div className="px-5 py-4 border-b border-zinc-100">
+        {/* Barra de filtro por categoria */}
+        <div className="px-5 py-3 border-b border-zinc-100 flex items-center gap-2 flex-wrap">
+          <Filter size={14} className="text-zinc-400 flex-shrink-0" />
+          <button
+            onClick={() => setFilterCategory('')}
+            className={`px-3 py-1 rounded-full text-xs font-medium transition-colors border ${
+              filterCategory === '' ? 'bg-zinc-900 text-white border-zinc-900' : 'bg-white text-zinc-600 border-zinc-200 hover:border-zinc-400'
+            }`}
+          >
+            Todos
+          </button>
+          {categories.map(c => (
+            <button
+              key={c.id}
+              onClick={() => setFilterCategory(filterCategory === String(c.id) ? '' : String(c.id))}
+              className={`px-3 py-1 rounded-full text-xs font-medium transition-colors border flex items-center gap-1.5 ${
+                filterCategory === String(c.id) ? 'text-white border-transparent' : 'bg-white text-zinc-600 border-zinc-200 hover:border-zinc-400'
+              }`}
+              style={filterCategory === String(c.id) ? { backgroundColor: c.color, borderColor: c.color } : {}}
+            >
+              <span className="w-2 h-2 rounded-full flex-shrink-0" style={{ backgroundColor: c.color }} />
+              {c.name}
+            </button>
+          ))}
+        </div>
+        <div className="px-5 py-3 border-b border-zinc-100 flex items-center justify-between">
           <h3 className="font-semibold text-zinc-900">Lançamentos</h3>
+          {filterCategory && (
+            <button onClick={() => setFilterCategory('')} className="text-xs text-zinc-400 hover:text-zinc-600 transition-colors">
+              Limpar filtro ×
+            </button>
+          )}
         </div>
         {loading ? (
           <div className="flex items-center justify-center h-32">
@@ -183,11 +180,11 @@ export default function Gastos() {
                 <div className="text-sm font-semibold text-red-500 flex-shrink-0">
                   -{formatCurrency(t.amount)}
                 </div>
-                <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                  <button onClick={() => setEditTarget(t)} className="p-1.5 rounded-lg hover:bg-zinc-100 text-zinc-400 hover:text-zinc-600">
+                <div className="flex items-center gap-1">
+                  <button onClick={() => setEditTarget(t)} className="p-1.5 rounded-lg hover:bg-zinc-100 text-zinc-400 hover:text-zinc-600 transition-colors">
                     <Pencil size={14} />
                   </button>
-                  <button onClick={() => handleDelete(t.id)} className="p-1.5 rounded-lg hover:bg-red-50 text-zinc-400 hover:text-red-500">
+                  <button onClick={() => handleDelete(t.id)} className="p-1.5 rounded-lg hover:bg-red-50 text-zinc-400 hover:text-red-500 transition-colors">
                     <Trash2 size={14} />
                   </button>
                 </div>

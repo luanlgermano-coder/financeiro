@@ -1,8 +1,10 @@
 import React, { useState, useEffect } from 'react';
-import { Plus, Trash2, Pencil, ToggleLeft, ToggleRight } from 'lucide-react';
-import { getSubscriptions, createSubscription, updateSubscription, deleteSubscription, getCards } from '../api';
+import { Plus, Trash2, Pencil, ToggleLeft, ToggleRight, CheckCircle2, Circle } from 'lucide-react';
+import { getSubscriptions, createSubscription, updateSubscription, deleteSubscription, getCards, checkSubscription, uncheckSubscription } from '../api';
 import { formatCurrency } from '../utils/formatters';
 import Modal from '../components/Modal';
+
+const currentMonth = () => new Date().toISOString().slice(0, 7);
 
 const COLORS = ['#ef4444','#f97316','#eab308','#22c55e','#3b82f6','#8b5cf6','#ec4899','#14b8a6','#6b7280'];
 
@@ -86,7 +88,7 @@ export default function Assinaturas() {
 
   const load = () => {
     setLoading(true);
-    Promise.all([getSubscriptions(), getCards()]).then(([subs, cds]) => {
+    Promise.all([getSubscriptions(currentMonth()), getCards()]).then(([subs, cds]) => {
       setSubscriptions(subs.data);
       setCards(cds.data);
     }).finally(() => setLoading(false));
@@ -125,6 +127,18 @@ export default function Assinaturas() {
     if (!window.confirm('Remover esta assinatura?')) return;
     await deleteSubscription(id);
     load();
+  };
+
+  const handleCheckToggle = async (sub) => {
+    const month = currentMonth();
+    if (sub.checked) {
+      await uncheckSubscription(sub.id, month);
+    } else {
+      await checkSubscription(sub.id, month);
+    }
+    setSubscriptions(prev => prev.map(s =>
+      s.id === sub.id ? { ...s, checked: !sub.checked } : s
+    ));
   };
 
   const active = subscriptions.filter(s => s.active);
@@ -179,19 +193,33 @@ export default function Assinaturas() {
         ) : (
           <div className="divide-y divide-zinc-50">
             {subscriptions.map(sub => (
-              <div key={sub.id} className={`flex items-center gap-4 px-5 py-4 hover:bg-zinc-50 transition-colors group ${!sub.active ? 'opacity-50' : ''}`}>
+              <div key={sub.id} className={`flex items-center gap-4 px-5 py-4 hover:bg-zinc-50 transition-colors ${!sub.active ? 'opacity-50' : ''}`}>
                 <div className="flex-shrink-0">
                   <span className="w-3 h-3 rounded-full block" style={{ backgroundColor: getSubColor(sub.id) }} />
                 </div>
                 <div className="flex-1 min-w-0">
-                  <p className="text-sm font-semibold text-zinc-800">{sub.name}</p>
+                  <div className="flex items-center gap-2">
+                    <p className={`text-sm font-semibold text-zinc-800 ${sub.checked ? 'line-through text-zinc-400' : ''}`}>{sub.name}</p>
+                    {sub.checked && (
+                      <span className="text-xs font-medium px-1.5 py-0.5 rounded-md bg-emerald-100 text-emerald-700">Pago</span>
+                    )}
+                  </div>
                   <div className="flex items-center gap-3 mt-0.5">
                     <span className="text-xs text-zinc-400">Dia {sub.billing_day} de cada mês</span>
                     {sub.card_name && <span className="text-xs text-zinc-400">· {sub.card_name}</span>}
                   </div>
                 </div>
                 <div className="text-sm font-bold text-zinc-900">{formatCurrency(sub.amount)}<span className="text-xs font-normal text-zinc-400">/mês</span></div>
-                <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                <div className="flex items-center gap-1">
+                  {sub.active && (
+                    <button
+                      onClick={() => handleCheckToggle(sub)}
+                      className={`p-1.5 rounded-lg transition-colors ${sub.checked ? 'text-emerald-500 hover:bg-emerald-50' : 'text-zinc-300 hover:text-emerald-500 hover:bg-emerald-50'}`}
+                      title={sub.checked ? 'Desmarcar pagamento' : 'Marcar como pago'}
+                    >
+                      {sub.checked ? <CheckCircle2 size={17} /> : <Circle size={17} />}
+                    </button>
+                  )}
                   <button
                     onClick={() => handleToggle(sub)}
                     className={`p-1.5 rounded-lg transition-colors ${sub.active ? 'text-emerald-500 hover:bg-emerald-50' : 'text-zinc-400 hover:bg-zinc-100'}`}
@@ -199,10 +227,10 @@ export default function Assinaturas() {
                   >
                     {sub.active ? <ToggleRight size={18} /> : <ToggleLeft size={18} />}
                   </button>
-                  <button onClick={() => setEditTarget(sub)} className="p-1.5 rounded-lg hover:bg-zinc-100 text-zinc-400 hover:text-zinc-600">
+                  <button onClick={() => setEditTarget(sub)} className="p-1.5 rounded-lg hover:bg-zinc-100 text-zinc-400 hover:text-zinc-600 transition-colors">
                     <Pencil size={14} />
                   </button>
-                  <button onClick={() => handleDelete(sub.id)} className="p-1.5 rounded-lg hover:bg-red-50 text-zinc-400 hover:text-red-500">
+                  <button onClick={() => handleDelete(sub.id)} className="p-1.5 rounded-lg hover:bg-red-50 text-zinc-400 hover:text-red-500 transition-colors">
                     <Trash2 size={14} />
                   </button>
                 </div>

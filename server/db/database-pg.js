@@ -61,6 +61,7 @@ async function initialize() {
     `);
     await client.query(`ALTER TABLE cards ADD COLUMN IF NOT EXISTS due_day INTEGER`);
     await client.query(`ALTER TABLE cards ADD COLUMN IF NOT EXISTS owner TEXT`);
+    await client.query(`ALTER TABLE debts ADD COLUMN IF NOT EXISTS due_day INTEGER`);
 
     await client.query(`
       CREATE TABLE IF NOT EXISTS transactions (

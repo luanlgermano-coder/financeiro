@@ -41,14 +41,14 @@ function detectCardFromText(text, cards) {
 // Regex parser
 // ---------------------------------------------------------------------------
 const CATEGORY_KEYWORDS = {
-  'Alimentação':  /almo[çc]o|jantar|caf[eé]|lanche|restaurante|pizza|burger|hamburguer|sushi|ifood|rappi|delivery|padaria|a[çc]ougue/i,
-  'Supermercado': /mercado|supermercado|hortifruti|feira|atacad[ao]|\bcompras\b/i,
-  'Transporte':   /\buber\b|\b99\b|taxi|t[áa]xi|gasolina|combust[ií]vel|\bposto\b|metr[ôo]|[ôo]nibus|passagem|estacionamento|ped[áa]gio/i,
-  'Saúde':        /farm[áa]cia|rem[eé]dio|\bmedic|\bconsul|dentista|m[eé]dico|plano.{0,10}sa[úu]de|academia|\bgym\b/i,
-  'Moradia':      /aluguel|condom[íi]nio|[áa]gua|\bluz\b|energia|\bg[áa]s\b|internet|telefone|celular/i,
-  'Lazer':        /cinema|netflix|spotify|disney|\bprime\b|streaming|\bjogo\b|\bshow\b|barzinho|\bbar\b|balada|viagem|hotel/i,
-  'Educação':     /\bcurso\b|faculdade|escola|mensalidade|\blivro\b|material/i,
-  'Roupas':       /roupa|cal[çc]a|camisa|sapato|t[êe]nis|vest[íi]do|\bloja\b/i,
+  'Alimentação':  /almo[çc]o|jantar|caf[eé]|lanche|restaurante|pizza|burger|hamburguer|sushi|ifood|rappi|delivery|padaria|a[çc]ougue|comida|salgado|espeto|churrasco|pastel|quilo/i,
+  'Supermercado': /mercado|supermercado|hortifruti|feira|atacad[ao]|\bcompras\b|carrefour|assai|\bextra\b|\bpao\s*de\s*a[çc][uú]car\b/i,
+  'Transporte':   /\buber\b|\b99\b|taxi|t[áa]xi|gasolina|combust[ií]vel|\bposto\b|metr[ôo]|[ôo]nibus|passagem|estacionamento|ped[áa]gio|99pop|cabify|abastec/i,
+  'Saúde':        /farm[áa]cia|rem[eé]dio|\bmedic|\bconsul|dentista|m[eé]dico|plano.{0,10}sa[úu]de|academia|\bgym\b|treino|suplemento|vitamina|ultrassom|exame/i,
+  'Moradia':      /aluguel|condom[íi]nio|[áa]gua|\bluz\b|energia|\bg[áa]s\b|internet|telefone|celular|iptu|manutencao|limpeza/i,
+  'Lazer':        /cinema|netflix|spotify|disney|\bprime\b|streaming|\bjogo\b|\bshow\b|barzinho|\bbar\b|balada|viagem|hotel|hbo|paramount|crunchyroll|apple.{0,5}tv|youtube.{0,5}premium/i,
+  'Educação':     /\bcurso\b|faculdade|escola|mensalidade|\blivro\b|material|udemy|alura|coursera|duolingo/i,
+  'Roupas':       /roupa|cal[çc]a|camisa|sapato|t[êe]nis|vest[íi]do|\bloja\b|camiseta|bermuda|shorts|meia|cueca|calcinha/i,
 };
 
 function guessCategory(text) {
@@ -104,18 +104,32 @@ async function parseWithGemini(text) {
   const model = genAI.getGenerativeModel({ model: 'gemini-1.5-flash' });
   const today = new Date().toISOString().slice(0, 10);
 
-  const prompt = `Analise esta mensagem financeira e extraia as informações em JSON.
+  const prompt = `Analise esta mensagem financeira em português e extraia as informações em JSON.
 Mensagem: "${text}"
 Data de hoje: ${today}
 
-Retorne SOMENTE um JSON válido:
+Regras para "category" (use EXATAMENTE um desses valores):
+- "Alimentação": restaurante, almoço, jantar, lanche, café, pizza, iFood, Rappi, delivery, padaria
+- "Supermercado": mercado, supermercado, feira, hortifruti, Carrefour, Assaí, Pão de Açúcar, compras de mercado
+- "Transporte": Uber, 99, táxi, gasolina, combustível, posto, ônibus, metrô, estacionamento, pedágio
+- "Saúde": farmácia, remédio, médico, consulta, dentista, academia, gym, treino, exame, plano de saúde
+- "Moradia": aluguel, condomínio, água, luz, energia, gás, internet, telefone, celular, IPTU
+- "Lazer": cinema, Netflix, Spotify, Disney+, Prime Video, HBO, streaming, show, viagem, hotel, bar
+- "Educação": curso, faculdade, escola, livro, material escolar, Udemy, Alura
+- "Roupas": roupa, calça, camisa, sapato, tênis, vestido, loja de roupa
+- "Outros": qualquer coisa que não se encaixe acima
+
+Retorne SOMENTE um JSON válido (sem markdown, sem explicações):
 {
-  "description": "descrição curta",
+  "description": "descrição curta em português",
   "amount": 0.00,
   "date": "YYYY-MM-DD",
-  "type": "expense" ou "income",
-  "category": "Alimentação|Transporte|Moradia|Saúde|Lazer|Educação|Roupas|Supermercado|Outros"
-}`;
+  "type": "expense",
+  "category": "Alimentação"
+}
+
+Obs: "type" é "income" apenas se a mensagem indicar que a pessoa RECEBEU dinheiro (salário, pix recebido, etc.)
+Se não houver data na mensagem, use a data de hoje.`;
 
   const result = await model.generateContent(prompt);
   const responseText = result.response.text().trim();

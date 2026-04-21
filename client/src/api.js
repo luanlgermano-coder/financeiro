@@ -56,10 +56,12 @@ export const updateCard = (id, data) => api.put(`/cards/${id}`, data);
 export const deleteCard = (id) => api.delete(`/cards/${id}`);
 
 // Subscriptions
-export const getSubscriptions = () => api.get('/subscriptions');
+export const getSubscriptions = (month) => api.get('/subscriptions', month ? { params: { month } } : {});
 export const createSubscription = (data) => api.post('/subscriptions', data);
 export const updateSubscription = (id, data) => api.put(`/subscriptions/${id}`, data);
 export const deleteSubscription = (id) => api.delete(`/subscriptions/${id}`);
+export const checkSubscription = (id, month) => api.post('/dues/check', { type: 'subscription', ref_id: id, month });
+export const uncheckSubscription = (id, month) => api.delete('/dues/check', { data: { type: 'subscription', ref_id: id, month } });
 
 // Debts
 export const getDebts = (params) => api.get('/debts', { params });

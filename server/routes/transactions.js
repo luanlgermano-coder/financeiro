@@ -51,8 +51,9 @@ router.get('/', async (req, res) => {
 
     if (month) {
       const [year, mon] = month.split('-');
+      const lastDay = new Date(parseInt(year), parseInt(mon), 0).getDate();
       sql += ' AND t.date BETWEEN ? AND ?';
-      params.push(`${year}-${mon}-01`, `${year}-${mon}-31`);
+      params.push(`${year}-${mon}-01`, `${year}-${mon}-${String(lastDay).padStart(2, '0')}`);
     }
     if (category_id) { sql += ' AND t.category_id = ?'; params.push(category_id); }
     if (type)        { sql += ' AND t.type = ?';        params.push(type); }

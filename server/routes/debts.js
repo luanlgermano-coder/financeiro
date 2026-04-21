@@ -18,13 +18,13 @@ router.get('/', async (req, res) => {
 
 router.post('/', async (req, res) => {
   try {
-    const { name, total_amount, monthly_payment, paid_amount, owner } = req.body;
+    const { name, total_amount, monthly_payment, paid_amount, owner, due_day } = req.body;
     if (!name || !total_amount || !monthly_payment) {
       return res.status(400).json({ error: 'Nome, valor total e parcela mensal são obrigatórios' });
     }
     const { rows } = await query(
-      `INSERT INTO debts (name, total_amount, monthly_payment, paid_amount, owner) VALUES (?, ?, ?, ?, ?) RETURNING *`,
-      [name, parseFloat(total_amount), parseFloat(monthly_payment), parseFloat(paid_amount || 0), owner || null]
+      `INSERT INTO debts (name, total_amount, monthly_payment, paid_amount, owner, due_day) VALUES (?, ?, ?, ?, ?, ?) RETURNING *`,
+      [name, parseFloat(total_amount), parseFloat(monthly_payment), parseFloat(paid_amount || 0), owner || null, due_day || null]
     );
     res.status(201).json(rows[0]);
   } catch (err) {
@@ -34,10 +34,10 @@ router.post('/', async (req, res) => {
 
 router.put('/:id', async (req, res) => {
   try {
-    const { name, total_amount, monthly_payment, paid_amount, owner } = req.body;
+    const { name, total_amount, monthly_payment, paid_amount, owner, due_day } = req.body;
     const { rows } = await query(
-      `UPDATE debts SET name=?, total_amount=?, monthly_payment=?, paid_amount=?, owner=? WHERE id=? RETURNING *`,
-      [name, parseFloat(total_amount), parseFloat(monthly_payment), parseFloat(paid_amount), owner || null, req.params.id]
+      `UPDATE debts SET name=?, total_amount=?, monthly_payment=?, paid_amount=?, owner=?, due_day=? WHERE id=? RETURNING *`,
+      [name, parseFloat(total_amount), parseFloat(monthly_payment), parseFloat(paid_amount), owner || null, due_day || null, req.params.id]
     );
     res.json(rows[0]);
   } catch (err) {
