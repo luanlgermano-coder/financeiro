@@ -35,6 +35,7 @@ async function start() {
   app.use('/api/goals',         require('./routes/goals'));
   app.use('/api/reports',       require('./routes/reports'));
   app.use('/api/bills',         require('./routes/bills'));
+  app.use('/api/dues',          require('./routes/dues'));
 
   if (process.env.NODE_ENV === 'production') {
     const distPath = path.join(__dirname, '../client/dist');

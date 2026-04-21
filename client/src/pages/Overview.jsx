@@ -7,10 +7,10 @@ import {
   TrendingUp, TrendingDown, Landmark, Wallet,
   ArrowUpRight, ArrowDownRight, ChevronLeft, ChevronRight,
   ArrowUp, ArrowDown, AlertTriangle, CheckCircle2, Lightbulb, Target, CreditCard,
-  Eye, EyeOff, Plus, X, Calendar, Trash2
+  Eye, EyeOff, X, Calendar
 } from 'lucide-react';
 import { Link } from 'react-router-dom';
-import { getDashboard, getBills, createBill, deleteBill } from '../api';
+import { getDashboard, getDues, checkDue, uncheckDue } from '../api';
 import { formatCurrency, formatDate, getCurrentMonth, getMonthOptions, originLabel, originColor } from '../utils/formatters';
 
 const DEBT_HIDDEN_KEY = 'fin_debt_hidden';
@@ -102,121 +102,6 @@ function daysUntilDue(due_day) {
     ? new Date(year, month, due_day)
     : new Date(year, month + 1, due_day);
   return Math.ceil((nextDue - today) / 86400000);
-}
-
-function BillModal({ onClose, onSave }) {
-  const [form, setForm] = useState({ name: '', amount: '', due_day: '', owner: 'casal', category: '' });
-  const [saving, setSaving] = useState(false);
-  const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
-
-  const submit = async (e) => {
-    e.preventDefault();
-    if (!form.name || !form.amount || !form.due_day) return;
-    setSaving(true);
-    try {
-      await onSave({
-        name: form.name,
-        amount: parseFloat(form.amount),
-        due_day: parseInt(form.due_day),
-        owner: form.owner,
-        category: form.category || null,
-      });
-      onClose();
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  return (
-    <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4" onClick={onClose}>
-      <div className="bg-white rounded-2xl shadow-xl w-full max-w-md" onClick={e => e.stopPropagation()}>
-        <div className="flex items-center justify-between p-5 border-b border-zinc-100">
-          <h2 className="font-semibold text-zinc-900">Nova Conta Recorrente</h2>
-          <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-zinc-100 transition-colors">
-            <X size={16} className="text-zinc-500" />
-          </button>
-        </div>
-        <form onSubmit={submit} className="p-5 space-y-4">
-          <div>
-            <label className="text-xs font-medium text-zinc-600 block mb-1.5">Nome</label>
-            <input
-              className="w-full border border-zinc-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-400"
-              placeholder="Ex: Aluguel, Netflix, Academia..."
-              value={form.name}
-              onChange={e => set('name', e.target.value)}
-              required
-              autoFocus
-            />
-          </div>
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className="text-xs font-medium text-zinc-600 block mb-1.5">Valor (R$)</label>
-              <input
-                type="number"
-                step="0.01"
-                min="0"
-                className="w-full border border-zinc-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-400"
-                placeholder="0,00"
-                value={form.amount}
-                onChange={e => set('amount', e.target.value)}
-                required
-              />
-            </div>
-            <div>
-              <label className="text-xs font-medium text-zinc-600 block mb-1.5">Dia do vencimento</label>
-              <input
-                type="number"
-                min="1"
-                max="31"
-                className="w-full border border-zinc-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-400"
-                placeholder="1 – 31"
-                value={form.due_day}
-                onChange={e => set('due_day', e.target.value)}
-                required
-              />
-            </div>
-          </div>
-          <div>
-            <label className="text-xs font-medium text-zinc-600 block mb-1.5">Responsável</label>
-            <select
-              className="w-full border border-zinc-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-400"
-              value={form.owner}
-              onChange={e => set('owner', e.target.value)}
-            >
-              <option value="casal">Casal</option>
-              <option value="luan">Luan</option>
-              <option value="barbara">Bárbara</option>
-            </select>
-          </div>
-          <div>
-            <label className="text-xs font-medium text-zinc-600 block mb-1.5">Categoria (opcional)</label>
-            <input
-              className="w-full border border-zinc-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-400"
-              placeholder="Ex: Moradia, Lazer, Saúde..."
-              value={form.category}
-              onChange={e => set('category', e.target.value)}
-            />
-          </div>
-          <div className="flex gap-2 pt-1">
-            <button
-              type="button"
-              onClick={onClose}
-              className="flex-1 border border-zinc-200 text-zinc-600 rounded-xl py-2 text-sm font-medium hover:bg-zinc-50 transition-colors"
-            >
-              Cancelar
-            </button>
-            <button
-              type="submit"
-              disabled={saving}
-              className="flex-1 bg-emerald-500 hover:bg-emerald-600 disabled:opacity-60 text-white rounded-xl py-2 text-sm font-medium transition-colors"
-            >
-              {saving ? 'Salvando...' : 'Salvar'}
-            </button>
-          </div>
-        </form>
-      </div>
-    </div>
-  );
 }
 
 function buildInsights(data) {
@@ -365,13 +250,6 @@ function healthPhrase(pct) {
   return 'Alerta: você está gastando mais do que ganha!';
 }
 
-const BILL_TABS = [
-  { key: 'all',      label: 'Todos' },
-  { key: 'luan',     label: 'Luan' },
-  { key: 'barbara',  label: 'Bárbara' },
-  { key: 'casal',    label: 'Casal' },
-];
-
 export default function Overview() {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -379,9 +257,8 @@ export default function Overview() {
   const [monthIdx, setMonthIdx] = useState(0);
   const currentMonth = months[monthIdx].value;
 
-  const [bills, setBills] = useState([]);
-  const [billsTab, setBillsTab] = useState('all');
-  const [showBillModal, setShowBillModal] = useState(false);
+  const [dues, setDues] = useState([]);
+  const [showPaid, setShowPaid] = useState(false);
 
   const load = useCallback(() => {
     setLoading(true);
@@ -391,27 +268,30 @@ export default function Overview() {
       .finally(() => setLoading(false));
   }, [currentMonth]);
 
-  const loadBills = useCallback(() => {
-    getBills().then(r => setBills(r.data)).catch(console.error);
-  }, []);
+  const loadDues = useCallback(() => {
+    getDues(currentMonth).then(r => setDues(r.data)).catch(console.error);
+  }, [currentMonth]);
 
   useEffect(() => { load(); }, [load]);
-  useEffect(() => { loadBills(); }, [loadBills]);
+  useEffect(() => { loadDues(); }, [loadDues]);
   useEffect(() => {
     const handler = () => load();
     window.addEventListener('transaction-saved', handler);
     return () => window.removeEventListener('transaction-saved', handler);
   }, [load]);
 
-  const handleSaveBill = async (billData) => {
-    await createBill(billData);
-    loadBills();
+  const handleCheckDue = async (item) => {
+    await checkDue(item.type, item.id, currentMonth);
+    setDues(prev => prev.map(d =>
+      d.type === item.type && d.id === item.id ? { ...d, checked: true } : d
+    ));
   };
 
-  const handleDeleteBill = async (id) => {
-    if (!confirm('Remover esta conta?')) return;
-    await deleteBill(id);
-    loadBills();
+  const handleUncheckDue = async (item) => {
+    await uncheckDue(item.type, item.id, currentMonth);
+    setDues(prev => prev.map(d =>
+      d.type === item.type && d.id === item.id ? { ...d, checked: false } : d
+    ));
   };
 
   if (loading) return (
@@ -425,18 +305,11 @@ export default function Overview() {
   const maxCategory = data.categoryBreakdown.length > 0 ? Math.max(...data.categoryBreakdown.map(c => c.total)) : 1;
   const insights = buildInsights(data);
 
-  const filteredBills = billsTab === 'all'
-    ? bills
-    : bills.filter(b => b.owner === billsTab);
-
-  const billsTotalMonth = filteredBills.reduce((s, b) => s + b.amount, 0);
+  const unpaidDues = dues.filter(d => !d.checked);
+  const paidDues   = dues.filter(d =>  d.checked);
 
   return (
     <div className="space-y-6">
-      {showBillModal && (
-        <BillModal onClose={() => setShowBillModal(false)} onSave={handleSaveBill} />
-      )}
-
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
@@ -567,114 +440,150 @@ export default function Overview() {
         </div>
       )}
 
-      {/* Próximos Vencimentos */}
+      {/* Próximos Vencimentos — unificado (cartões + contas fixas) */}
       <div className="bg-white rounded-2xl p-5 shadow-sm hover:shadow-md transition-shadow">
         <div className="flex items-center justify-between mb-4">
           <div className="flex items-center gap-2">
             <Calendar size={18} className="text-blue-500" />
             <h3 className="font-semibold text-zinc-900">Próximos Vencimentos</h3>
           </div>
-          <button
-            onClick={() => setShowBillModal(true)}
-            className="flex items-center gap-1.5 text-xs font-medium text-emerald-600 hover:text-emerald-700 bg-emerald-50 hover:bg-emerald-100 px-3 py-1.5 rounded-lg transition-colors"
+          <Link
+            to="/configuracoes"
+            className="text-xs text-zinc-400 hover:text-zinc-600 transition-colors"
           >
-            <Plus size={13} />
-            Adicionar conta
-          </button>
+            Gerenciar →
+          </Link>
         </div>
 
-        {/* Tabs */}
-        <div className="flex gap-1 mb-4">
-          {BILL_TABS.map(tab => (
-            <button
-              key={tab.key}
-              onClick={() => setBillsTab(tab.key)}
-              className={`px-3 py-1 rounded-lg text-xs font-medium transition-colors ${
-                billsTab === tab.key
-                  ? 'bg-blue-500 text-white'
-                  : 'text-zinc-500 hover:bg-zinc-100'
-              }`}
-            >
-              {tab.label}
-            </button>
-          ))}
-        </div>
-
-        {filteredBills.length === 0 ? (
+        {dues.length === 0 ? (
           <div className="text-center py-8">
             <Calendar size={28} className="text-zinc-300 mx-auto mb-2" />
-            <p className="text-zinc-400 text-sm">Nenhuma conta recorrente cadastrada</p>
-            <button
-              onClick={() => setShowBillModal(true)}
-              className="mt-3 text-xs text-emerald-600 hover:text-emerald-700 font-medium"
-            >
-              + Adicionar primeira conta
-            </button>
+            <p className="text-zinc-400 text-sm">Nenhum vencimento cadastrado</p>
+            <Link to="/configuracoes" className="mt-2 inline-block text-xs text-emerald-600 hover:text-emerald-700 font-medium">
+              Configurar cartões e contas →
+            </Link>
           </div>
         ) : (
           <>
             <div className="space-y-2">
-              {filteredBills.map(bill => {
-                const days = daysUntilDue(bill.due_day);
-                const isUrgent = days <= 3;
-                const isWarning = days <= 7 && days > 3;
-                const ownerColors = {
-                  luan:    { bg: 'bg-blue-100',  text: 'text-blue-700'  },
-                  barbara: { bg: 'bg-pink-100',  text: 'text-pink-700'  },
-                  casal:   { bg: 'bg-violet-100', text: 'text-violet-700' },
+              {unpaidDues.map(item => {
+                const days = daysUntilDue(item.due_day);
+                const isUrgent  = days <= 3;
+                const isWarning = days > 3 && days <= 7;
+                const OWNER_COLOR = {
+                  luan:    'bg-blue-100 text-blue-700',
+                  barbara: 'bg-pink-100 text-pink-700',
+                  casal:   'bg-violet-100 text-violet-700',
                 };
-                const oc = ownerColors[bill.owner] || ownerColors.casal;
-                const ownerLabel = bill.owner === 'barbara' ? 'Bárbara' : bill.owner.charAt(0).toUpperCase() + bill.owner.slice(1);
+                const ownerLabel = item.owner === 'barbara' ? 'Bárbara'
+                  : item.owner ? item.owner.charAt(0).toUpperCase() + item.owner.slice(1) : null;
 
                 return (
                   <div
-                    key={bill.id}
+                    key={`${item.type}-${item.id}`}
                     className={`flex items-center gap-3 p-3 rounded-xl border transition-colors ${
-                      isUrgent
-                        ? 'bg-red-50 border-red-200'
-                        : isWarning
-                        ? 'bg-amber-50 border-amber-200'
-                        : 'bg-zinc-50 border-zinc-100 hover:bg-zinc-100'
+                      isUrgent  ? 'bg-red-50 border-red-200' :
+                      isWarning ? 'bg-amber-50 border-amber-200' :
+                                  'bg-zinc-50 border-zinc-100'
                     }`}
                   >
+                    {/* Day badge */}
                     <div className={`w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0 font-bold text-sm ${
-                      isUrgent ? 'bg-red-500 text-white' : isWarning ? 'bg-amber-500 text-white' : 'bg-zinc-200 text-zinc-600'
+                      isUrgent  ? 'bg-red-500 text-white' :
+                      isWarning ? 'bg-amber-500 text-white' :
+                                  'bg-zinc-200 text-zinc-600'
                     }`}>
-                      {bill.due_day}
+                      {item.due_day}
                     </div>
+
+                    {/* Name + tags */}
                     <div className="flex-1 min-w-0">
-                      <p className="text-sm font-medium text-zinc-800 truncate">{bill.name}</p>
+                      <p className="text-sm font-medium text-zinc-800 truncate">{item.name}</p>
                       <div className="flex items-center gap-1.5 mt-0.5 flex-wrap">
-                        {bill.category && (
-                          <span className="text-xs text-zinc-400">{bill.category}</span>
+                        {item.type === 'card' && (
+                          <span
+                            className="text-xs font-medium px-1.5 py-0.5 rounded-md text-white flex-shrink-0"
+                            style={{ backgroundColor: item.color || '#6b7280' }}
+                          >
+                            cartão
+                          </span>
                         )}
-                        <span className={`text-xs font-medium px-1.5 py-0.5 rounded-md ${oc.bg} ${oc.text}`}>
-                          {ownerLabel}
-                        </span>
+                        {item.type === 'bill' && ownerLabel && (
+                          <span className={`text-xs font-medium px-1.5 py-0.5 rounded-md flex-shrink-0 ${OWNER_COLOR[item.owner] || OWNER_COLOR.casal}`}>
+                            {ownerLabel}
+                          </span>
+                        )}
+                        {item.type === 'card' && (
+                          <span className="text-xs text-zinc-400">Gasto no mês</span>
+                        )}
                       </div>
                     </div>
-                    <div className="text-right flex-shrink-0 mr-1">
-                      <p className="text-sm font-bold text-zinc-800">{formatCurrency(bill.amount)}</p>
+
+                    {/* Amount + days */}
+                    <div className="text-right flex-shrink-0">
+                      <p className="text-sm font-bold text-zinc-800">{formatCurrency(item.amount)}</p>
                       <p className={`text-xs font-medium mt-0.5 ${
                         isUrgent ? 'text-red-600' : isWarning ? 'text-amber-600' : 'text-zinc-400'
                       }`}>
-                        {days === 0 ? 'Vence hoje' : days === 1 ? 'Amanhã' : `${days}d`}
+                        {days === 0 ? 'Hoje' : days === 1 ? 'Amanhã' : `${days}d`}
                       </p>
                     </div>
+
+                    {/* Check button */}
                     <button
-                      onClick={() => handleDeleteBill(bill.id)}
-                      className="p-1.5 rounded-lg hover:bg-red-100 transition-colors flex-shrink-0"
+                      onClick={() => handleCheckDue(item)}
+                      className="p-1.5 rounded-xl hover:bg-emerald-100 transition-colors flex-shrink-0"
+                      title="Marcar como pago"
                     >
-                      <Trash2 size={13} className="text-zinc-400 hover:text-red-500" />
+                      <CheckCircle2 size={17} className="text-zinc-300 hover:text-emerald-500 transition-colors" />
                     </button>
                   </div>
                 );
               })}
             </div>
-            {filteredBills.length > 0 && (
+
+            {/* Paid items (collapsible) */}
+            {paidDues.length > 0 && (
+              <div className="mt-3">
+                <button
+                  onClick={() => setShowPaid(s => !s)}
+                  className="text-xs text-zinc-400 hover:text-zinc-600 transition-colors flex items-center gap-1"
+                >
+                  <span>{showPaid ? '▲' : '▼'}</span>
+                  <span>{paidDues.length} pago{paidDues.length !== 1 ? 's' : ''} este mês</span>
+                </button>
+                {showPaid && (
+                  <div className="mt-2 space-y-1">
+                    {paidDues.map(item => (
+                      <div
+                        key={`${item.type}-${item.id}`}
+                        className="flex items-center gap-3 p-2.5 rounded-xl border border-zinc-100 bg-zinc-50 opacity-60"
+                      >
+                        <div className="w-8 h-8 rounded-lg flex items-center justify-center bg-zinc-200 text-zinc-400 text-xs font-bold flex-shrink-0">
+                          {item.due_day}
+                        </div>
+                        <p className="text-sm text-zinc-400 flex-1 truncate line-through">{item.name}</p>
+                        <p className="text-xs text-zinc-400 flex-shrink-0">{formatCurrency(item.amount)}</p>
+                        <button
+                          onClick={() => handleUncheckDue(item)}
+                          className="p-1.5 rounded-lg hover:bg-zinc-200 transition-colors flex-shrink-0"
+                          title="Desmarcar"
+                        >
+                          <X size={12} className="text-zinc-400" />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+
+            {unpaidDues.length > 0 && (
               <div className="mt-4 pt-3 border-t border-zinc-100 flex justify-between items-center">
-                <p className="text-xs text-zinc-500">{filteredBills.length} conta{filteredBills.length !== 1 ? 's' : ''} recorrente{filteredBills.length !== 1 ? 's' : ''}</p>
-                <p className="text-sm font-bold text-blue-600">{formatCurrency(billsTotalMonth)}/mês</p>
+                <p className="text-xs text-zinc-500">{unpaidDues.length} a vencer</p>
+                <p className="text-sm font-bold text-blue-600">
+                  {formatCurrency(unpaidDues.reduce((s, d) => s + d.amount, 0))}
+                </p>
               </div>
             )}
           </>

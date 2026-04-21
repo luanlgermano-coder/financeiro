@@ -251,6 +251,14 @@ export default function GastosOwner({ owner: ownerProp = 'luan' }) {
   const maxCat  = catList.length > 0 ? catList[0].total : 1;
   const topCat  = catList[0];
 
+  const cardMap = transactions.reduce((acc, t) => {
+    if (!t.card_id) return acc;
+    if (!acc[t.card_id]) acc[t.card_id] = { name: t.card_name || '?', color: t.card_color || '#6b7280', total: 0 };
+    acc[t.card_id].total += t.amount;
+    return acc;
+  }, {});
+  const cardList = Object.values(cardMap).sort((a, b) => b.total - a.total);
+
   return (
     <div className="space-y-6">
       {/* Header */}
@@ -317,6 +325,27 @@ export default function GastosOwner({ owner: ownerProp = 'luan' }) {
               <h3 className="font-semibold text-zinc-900 mb-4">Por Categoria</h3>
               <div className="space-y-3">
                 {catList.map(c => <CategoryBar key={c.name} {...c} max={maxCat} />)}
+              </div>
+            </div>
+          )}
+
+          {cardList.length > 0 && (
+            <div className="bg-white rounded-2xl p-5 shadow-sm">
+              <h3 className="font-semibold text-zinc-900 mb-4">Por Cartão</h3>
+              <div className="space-y-2.5">
+                {cardList.map(c => (
+                  <div key={c.name} className="flex items-center gap-3">
+                    <div className="w-3 h-3 rounded-full flex-shrink-0" style={{ backgroundColor: c.color }} />
+                    <span className="text-sm text-zinc-600 flex-1 truncate">{c.name}</span>
+                    <span className="text-sm font-semibold text-zinc-800">{formatCurrency(c.total)}</span>
+                  </div>
+                ))}
+              </div>
+              <div className="mt-3 pt-3 border-t border-zinc-100 flex justify-between items-center">
+                <span className="text-xs text-zinc-400">Total com cartão</span>
+                <span className="text-sm font-bold text-zinc-900">
+                  {formatCurrency(cardList.reduce((s, c) => s + c.total, 0))}
+                </span>
               </div>
             </div>
           )}

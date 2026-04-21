@@ -55,9 +55,11 @@ async function initialize() {
         id   SERIAL PRIMARY KEY,
         name  TEXT NOT NULL,
         color TEXT NOT NULL DEFAULT '#6b7280',
+        due_day INTEGER,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       )
     `);
+    await client.query(`ALTER TABLE cards ADD COLUMN IF NOT EXISTS due_day INTEGER`);
 
     await client.query(`
       CREATE TABLE IF NOT EXISTS transactions (
@@ -144,6 +146,17 @@ async function initialize() {
         category TEXT,
         active   INTEGER NOT NULL DEFAULT 1,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      )
+    `);
+
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS due_checks (
+        id       SERIAL PRIMARY KEY,
+        type     TEXT NOT NULL,
+        ref_id   INTEGER NOT NULL,
+        month    TEXT NOT NULL,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        UNIQUE(type, ref_id, month)
       )
     `);
 

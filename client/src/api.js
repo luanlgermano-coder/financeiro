@@ -104,4 +104,9 @@ export const createBill = (data) => api.post('/bills', data);
 export const updateBill = (id, data) => api.put(`/bills/${id}`, data);
 export const deleteBill = (id) => api.delete(`/bills/${id}`);
 
+// Dues (unified cards + bills due list)
+export const getDues = (month) => api.get('/dues', month ? { params: { month } } : {});
+export const checkDue = (type, ref_id, month) => api.post('/dues/check', { type, ref_id, month });
+export const uncheckDue = (type, ref_id, month) => api.delete('/dues/check', { data: { type, ref_id, month } });
+
 export default api;
