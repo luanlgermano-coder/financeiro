@@ -1,13 +1,14 @@
 import React, { useState, useEffect } from 'react';
 import {
   Save, Trash2, AlertTriangle, CheckCircle2, X, CalendarX,
-  Plus, CreditCard, Receipt
+  Plus, CreditCard, Receipt, Pencil
 } from 'lucide-react';
 import {
   getSettings, updateSettings, resetData, resetMonth,
   getCards, updateCard,
-  getBills, createBill, deleteBill,
+  getBills, createBill, updateBill, deleteBill,
 } from '../api';
+import Modal from '../components/Modal';
 import { formatCurrency } from '../utils/formatters';
 
 function ConfirmModal({ title, message, confirmLabel, onConfirm, onClose, loading }) {
@@ -81,6 +82,8 @@ export default function Configuracoes() {
   const [bills, setBills]         = useState([]);
   const [billForm, setBillForm]   = useState({ name: '', amount: '', due_day: '', owner: 'casal' });
   const [savingBill, setSavingBill] = useState(false);
+  const [editBill, setEditBill]   = useState(null);
+  const [savingEditBill, setSavingEditBill] = useState(false);
 
   const currentMonthLabel = new Date().toLocaleString('pt-BR', { month: 'long', year: 'numeric' });
 
@@ -168,6 +171,25 @@ export default function Configuracoes() {
     await deleteBill(id);
     setBills(prev => prev.filter(b => b.id !== id));
     flash('Conta removida.');
+  };
+
+  const handleUpdateBill = async (e) => {
+    e.preventDefault();
+    if (!editBill.name || !editBill.amount || !editBill.due_day) return;
+    setSavingEditBill(true);
+    try {
+      const res = await updateBill(editBill.id, {
+        name:    editBill.name,
+        amount:  parseFloat(editBill.amount),
+        due_day: parseInt(editBill.due_day),
+        owner:   editBill.owner,
+        active:  1,
+      });
+      setBills(prev => prev.map(b => b.id === editBill.id ? res.data : b).sort((a, b) => a.due_day - b.due_day));
+      setEditBill(null);
+      flash('Conta atualizada.');
+    } catch (err) { flash('Erro ao atualizar conta.', true); }
+    finally { setSavingEditBill(false); }
   };
 
   return (
@@ -373,6 +395,12 @@ export default function Configuracoes() {
                   </div>
                   <p className="text-sm font-semibold text-zinc-800 flex-shrink-0">{formatCurrency(bill.amount)}</p>
                   <button
+                    onClick={() => setEditBill({ ...bill, amount: String(bill.amount), due_day: String(bill.due_day) })}
+                    className="p-1.5 rounded-lg hover:bg-zinc-200 transition-colors flex-shrink-0"
+                  >
+                    <Pencil size={14} className="text-zinc-400" />
+                  </button>
+                  <button
                     onClick={() => handleDeleteBill(bill.id)}
                     className="p-1.5 rounded-lg hover:bg-red-100 transition-colors flex-shrink-0"
                   >
@@ -452,6 +480,72 @@ export default function Configuracoes() {
           onClose={() => setShowAllModal(false)}
           loading={loadingAll}
         />
+      )}
+
+      {editBill && (
+        <Modal title="Editar Conta Fixa" onClose={() => setEditBill(null)}>
+          <form onSubmit={handleUpdateBill} className="space-y-4">
+            <div>
+              <label className="block text-sm font-medium text-zinc-700 mb-1">Nome da conta</label>
+              <input
+                type="text"
+                value={editBill.name}
+                onChange={e => setEditBill(b => ({ ...b, name: e.target.value }))}
+                className="w-full px-3 py-2 border border-zinc-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                autoFocus
+                required
+              />
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="block text-sm font-medium text-zinc-700 mb-1">Valor (R$)</label>
+                <input
+                  type="number"
+                  step="0.01"
+                  min="0"
+                  value={editBill.amount}
+                  onChange={e => setEditBill(b => ({ ...b, amount: e.target.value }))}
+                  className="w-full px-3 py-2 border border-zinc-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                  required
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-zinc-700 mb-1">Dia de vencimento</label>
+                <input
+                  type="number"
+                  min="1"
+                  max="31"
+                  value={editBill.due_day}
+                  onChange={e => setEditBill(b => ({ ...b, due_day: e.target.value }))}
+                  className="w-full px-3 py-2 border border-zinc-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                  required
+                />
+              </div>
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-zinc-700 mb-1">Responsável</label>
+              <select
+                value={editBill.owner}
+                onChange={e => setEditBill(b => ({ ...b, owner: e.target.value }))}
+                className="w-full px-3 py-2 border border-zinc-300 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500"
+              >
+                {OWNER_OPTS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+              </select>
+            </div>
+            <div className="flex gap-3 pt-1">
+              <button type="button" onClick={() => setEditBill(null)} className="flex-1 py-2.5 border border-zinc-300 text-zinc-700 rounded-lg text-sm font-medium hover:bg-zinc-50">
+                Cancelar
+              </button>
+              <button
+                type="submit"
+                disabled={savingEditBill}
+                className="flex-1 py-2.5 bg-emerald-500 hover:bg-emerald-600 disabled:opacity-60 text-white rounded-lg text-sm font-semibold transition-colors"
+              >
+                {savingEditBill ? 'Salvando…' : 'Salvar'}
+              </button>
+            </div>
+          </form>
+        </Modal>
       )}
     </div>
   );

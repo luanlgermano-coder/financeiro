@@ -181,16 +181,21 @@ async function initialize() {
     );
 
     // Seed default cards
+    await client.query(`DELETE FROM cards WHERE name = 'Bradesco'`);
     await client.query(`
       INSERT INTO cards (id, name, color) VALUES
-        (1, 'Nubank',           '#820ad1'),
-        (2, 'Inter',            '#ff7a00'),
-        (3, 'Itaú',             '#003399'),
-        (4, 'Bradesco',         '#cc0000'),
-        (5, 'Dinheiro',         '#22c55e'),
-        (6, 'Santander Conta',  '#EC0000'),
-        (7, 'Santander Cartão', '#EC0000'),
-        (8, 'Mercado Pago',     '#00B1EA')
+        (1,  'Nubank',              '#820ad1'),
+        (2,  'Inter',               '#ff7a00'),
+        (3,  'Itaú',                '#003399'),
+        (5,  'Dinheiro',            '#22c55e'),
+        (6,  'Santander Conta',     '#EC0000'),
+        (7,  'Santander Cartão',    '#EC0000'),
+        (8,  'Mercado Pago',        '#00B1EA'),
+        (9,  'Itaú Pão de Açúcar',  '#F5A623'),
+        (10, 'Itaú Bárbara',        '#003399'),
+        (11, 'Inter Bárbara',       '#ff7a00'),
+        (12, 'Nubank Bárbara',      '#820ad1'),
+        (13, 'Porto Seguro',        '#003087')
       ON CONFLICT (id) DO NOTHING
     `);
     await client.query(
