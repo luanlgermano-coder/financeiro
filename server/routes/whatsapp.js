@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const { query } = require('../db/database-pg');
 const { GoogleGenerativeAI } = require('@google/generative-ai');
+const { randomUUID } = require('crypto');
 const { makeHash, findDuplicate } = require('../utils/duplicates');
 const { sendMessage } = require('../services/whatsapp.service');
 const { checkAndSendAlerts } = require('../services/alerts.service');
@@ -237,10 +238,11 @@ router.post('/whatsapp', async (req, res) => {
 
       if ((parsed.installments || 1) > 1) {
         // Installment purchase — create N transactions
-        const n     = parsed.installments;
-        const total = Math.abs(parsed.amount);
-        const unit  = parseFloat((total / n).toFixed(2));
-        const last  = parseFloat((total - unit * (n - 1)).toFixed(2));
+        const n        = parsed.installments;
+        const total    = Math.abs(parsed.amount);
+        const unit     = parseFloat((total / n).toFixed(2));
+        const last     = parseFloat((total - unit * (n - 1)).toFixed(2));
+        const group_id = randomUUID();
 
         for (let i = 1; i <= n; i++) {
           const amount      = i === n ? last : unit;
@@ -248,9 +250,9 @@ router.post('/whatsapp', async (req, res) => {
           const desc        = `${parsed.description} (${i}/${n})`;
           const hash        = makeHash(desc, amount, installDate);
           await query(
-            `INSERT INTO transactions (description, amount, date, type, category_id, card_id, origin, hash, owner, installment_current, installment_total)
-             VALUES (?, ?, ?, 'expense', ?, ?, 'whatsapp', ?, ?, ?, ?)`,
-            [desc, amount, installDate, categoryId, cardId, hash, owner, i, n]
+            `INSERT INTO transactions (description, amount, date, type, category_id, card_id, origin, hash, owner, installment_current, installment_total, installment_group_id)
+             VALUES (?, ?, ?, 'expense', ?, ?, 'whatsapp', ?, ?, ?, ?, ?)`,
+            [desc, amount, installDate, categoryId, cardId, hash, owner, i, n, group_id]
           );
         }
 

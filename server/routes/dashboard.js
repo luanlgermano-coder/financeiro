@@ -61,7 +61,7 @@ router.get('/', async (req, res) => {
       GROUP BY c.id, c.name, c.color, c.icon HAVING COALESCE(SUM(t.amount),0) > 0 ORDER BY total DESC
     `, [startDate, endDate]);
 
-    // Recent transactions
+    // Recent transactions — current month only, limit 10
     const { rows: recentTransactions } = await query(`
       SELECT t.id, t.description, t.amount, t.date, t.type, t.origin, t.owner,
         c.name as category_name, c.color as category_color, c.icon as category_icon,
@@ -69,8 +69,9 @@ router.get('/', async (req, res) => {
       FROM transactions t
       LEFT JOIN categories c ON t.category_id=c.id
       LEFT JOIN cards ca ON t.card_id=ca.id
-      ORDER BY t.date DESC, t.created_at DESC LIMIT 5
-    `);
+      WHERE t.date BETWEEN ? AND ?
+      ORDER BY t.date DESC, t.created_at DESC LIMIT 10
+    `, [startDate, endDate]);
 
     // Monthly evolution (last 6 months)
     const monthlyEvolution = [];
@@ -94,24 +95,27 @@ router.get('/', async (req, res) => {
     const ownerSummary = {};
     for (const owner of ['luan', 'barbara']) {
       const [
-        { rows: [oIncome]  },
-        { rows: [oExpense] },
-        { rows: [oDebt]    },
-        { rows: [oPrevIncome]  },
-        { rows: [oPrevExpense] },
+        { rows: [oIncome]       },
+        { rows: [oExpense]      },
+        { rows: [oDebt]         },
+        { rows: [oPrevIncome]   },
+        { rows: [oPrevExpense]  },
+        { rows: [oPaidForOther] },
       ] = await Promise.all([
         query(`SELECT COALESCE(SUM(amount),0) as t FROM transactions WHERE owner=? AND type='income'  AND date BETWEEN ? AND ?`, [owner, startDate, endDate]),
         query(`SELECT COALESCE(SUM(amount),0) as t FROM transactions WHERE owner=? AND type='expense' AND date BETWEEN ? AND ?`, [owner, startDate, endDate]),
         query(`SELECT COALESCE(SUM(total_amount - paid_amount),0) as t FROM debts WHERE owner=? AND total_amount > paid_amount`, [owner]),
         query(`SELECT COALESCE(SUM(amount),0) as t FROM transactions WHERE owner=? AND type='income'  AND date BETWEEN ? AND ?`, [owner, prevStart, prevEnd]),
         query(`SELECT COALESCE(SUM(amount),0) as t FROM transactions WHERE owner=? AND type='expense' AND date BETWEEN ? AND ?`, [owner, prevStart, prevEnd]),
+        query(`SELECT COALESCE(SUM(amount),0) as t FROM transactions WHERE owner!=? AND paid_by=? AND type='expense' AND date BETWEEN ? AND ?`, [owner, owner, startDate, endDate]),
       ]);
       ownerSummary[owner] = {
-        income:      oIncome.t,
-        expense:     oExpense.t,
-        balance:     oIncome.t - oExpense.t,
-        prevBalance: oPrevIncome.t - oPrevExpense.t,
-        debtTotal:   oDebt.t,
+        income:             oIncome.t,
+        expense:            oExpense.t,
+        paidForOtherExpense: oPaidForOther.t,
+        balance:            oIncome.t - oExpense.t - oPaidForOther.t,
+        prevBalance:        oPrevIncome.t - oPrevExpense.t,
+        debtTotal:          oDebt.t,
       };
     }
 

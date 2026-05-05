@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const { query, withTransaction } = require('../db/database-pg');
 const { makeHash, findDuplicate } = require('../utils/duplicates');
+const { randomUUID } = require('crypto');
 
 function addMonths(dateStr, n) {
   const [y, m, d] = dateStr.split('-').map(Number);
@@ -16,9 +17,9 @@ function addMonths(dateStr, n) {
 const SELECT_FULL = `
   SELECT
     t.id, t.description, t.amount, t.date, t.type, t.origin,
-    t.notes, t.hash, t.owner, t.created_at,
+    t.notes, t.hash, t.owner, t.paid_by, t.created_at,
     t.category_id, t.card_id,
-    t.installment_current, t.installment_total,
+    t.installment_current, t.installment_total, t.installment_group_id,
     c.name  as category_name,  c.color as category_color, c.icon as category_icon,
     ca.name as card_name,      ca.color as card_color
   FROM transactions t
@@ -58,7 +59,7 @@ router.get('/', async (req, res) => {
     if (category_id) { sql += ' AND t.category_id = ?'; params.push(category_id); }
     if (type)        { sql += ' AND t.type = ?';        params.push(type); }
     if (origin)      { sql += ' AND t.origin = ?';      params.push(origin); }
-    if (owner)       { sql += ' AND t.owner = ?';       params.push(owner); }
+    if (owner)       { sql += ' AND (t.owner = ? OR (t.paid_by = ? AND t.owner != ?))'; params.push(owner, owner, owner); }
 
     sql += ' ORDER BY t.date DESC, t.created_at DESC';
     const { rows } = await query(sql, params);
@@ -71,16 +72,17 @@ router.get('/', async (req, res) => {
 // POST /api/transactions/installments
 router.post('/installments', async (req, res) => {
   try {
-    const { description, total_amount, installments, date, category_id, card_id, owner, notes } = req.body;
+    const { description, total_amount, installments, date, category_id, card_id, owner, notes, paid_by } = req.body;
     if (!description || !total_amount || !installments || !date) {
       return res.status(400).json({ error: 'Campos obrigatórios: description, total_amount, installments, date' });
     }
     const n = parseInt(installments);
     if (n < 2 || n > 24) return res.status(400).json({ error: 'installments deve ser entre 2 e 24' });
 
-    const total = parseFloat(total_amount);
-    const unit  = parseFloat((total / n).toFixed(2));
-    const last  = parseFloat((total - unit * (n - 1)).toFixed(2));
+    const total    = parseFloat(total_amount);
+    const unit     = parseFloat((total / n).toFixed(2));
+    const last     = parseFloat((total - unit * (n - 1)).toFixed(2));
+    const group_id = randomUUID();
 
     const created = [];
     for (let i = 1; i <= n; i++) {
@@ -89,14 +91,40 @@ router.post('/installments', async (req, res) => {
       const desc        = `${description} (${i}/${n})`;
       const hash        = makeHash(desc, amount, installDate);
       const { rows } = await query(
-        `INSERT INTO transactions (description, amount, date, type, category_id, card_id, origin, notes, hash, owner, installment_current, installment_total)
-         VALUES (?, ?, ?, 'expense', ?, ?, 'manual', ?, ?, ?, ?, ?) RETURNING id`,
-        [desc, amount, installDate, category_id || null, card_id || null, notes || null, hash, owner || null, i, n]
+        `INSERT INTO transactions (description, amount, date, type, category_id, card_id, origin, notes, hash, owner, paid_by, installment_current, installment_total, installment_group_id)
+         VALUES (?, ?, ?, 'expense', ?, ?, 'manual', ?, ?, ?, ?, ?, ?, ?) RETURNING id`,
+        [desc, amount, installDate, category_id || null, card_id || null, notes || null, hash, owner || null, paid_by || null, i, n, group_id]
       );
       created.push({ id: rows[0].id, description: desc, amount, date: installDate });
     }
 
-    res.status(201).json({ installments: n, total, unit, last, created });
+    res.status(201).json({ installments: n, total, unit, last, created, group_id });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// PUT /api/transactions/group/:group_id — edita descrição, categoria e cartão de todas as parcelas do grupo
+router.put('/group/:group_id', async (req, res) => {
+  try {
+    const { description, category_id, card_id } = req.body;
+    const { rows } = await query(
+      `SELECT id, description, amount, date FROM transactions WHERE installment_group_id = ?`,
+      [req.params.group_id]
+    );
+    if (rows.length === 0) return res.status(404).json({ error: 'Grupo não encontrado' });
+
+    for (const tx of rows) {
+      const suffix  = tx.description.match(/\s*\(\d+\/\d+\)$/)?.[0] || '';
+      const newDesc = suffix ? `${description.trim()}${suffix}` : description.trim();
+      const hash    = makeHash(newDesc, tx.amount, tx.date);
+      await query(
+        `UPDATE transactions SET description=?, category_id=?, card_id=?, hash=? WHERE id=?`,
+        [newDesc, category_id || null, card_id || null, hash, tx.id]
+      );
+    }
+
+    res.json({ updated: rows.length });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
@@ -105,16 +133,16 @@ router.post('/installments', async (req, res) => {
 // POST /api/transactions
 router.post('/', async (req, res) => {
   try {
-    const { description, amount, date, type, category_id, card_id, origin, notes, owner } = req.body;
+    const { description, amount, date, type, category_id, card_id, origin, notes, owner, paid_by } = req.body;
     if (!description || !amount || !date || !type) {
       return res.status(400).json({ error: 'Campos obrigatórios: description, amount, date, type' });
     }
     const hash = makeHash(description, amount, date);
     const { rows: [ins] } = await query(
-      `INSERT INTO transactions (description, amount, date, type, category_id, card_id, origin, notes, hash, owner)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?) RETURNING id`,
+      `INSERT INTO transactions (description, amount, date, type, category_id, card_id, origin, notes, hash, owner, paid_by)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) RETURNING id`,
       [description, parseFloat(amount), date, type,
-       category_id || null, card_id || null, origin || 'manual', notes || null, hash, owner || null]
+       category_id || null, card_id || null, origin || 'manual', notes || null, hash, owner || null, paid_by || null]
     );
     const { rows } = await query(`${SELECT_FULL} WHERE t.id = ?`, [ins.id]);
     res.status(201).json(rows[0]);
@@ -126,12 +154,12 @@ router.post('/', async (req, res) => {
 // PUT /api/transactions/:id
 router.put('/:id', async (req, res) => {
   try {
-    const { description, amount, date, type, category_id, card_id, notes, owner } = req.body;
+    const { description, amount, date, type, category_id, card_id, notes, owner, paid_by } = req.body;
     const hash = makeHash(description, amount, date);
     await query(
-      `UPDATE transactions SET description=?, amount=?, date=?, type=?, category_id=?, card_id=?, notes=?, hash=?, owner=? WHERE id=?`,
+      `UPDATE transactions SET description=?, amount=?, date=?, type=?, category_id=?, card_id=?, notes=?, hash=?, owner=?, paid_by=? WHERE id=?`,
       [description, parseFloat(amount), date, type,
-       category_id || null, card_id || null, notes || null, hash, owner || null, req.params.id]
+       category_id || null, card_id || null, notes || null, hash, owner || null, paid_by || null, req.params.id]
     );
     const { rows } = await query(`${SELECT_FULL} WHERE t.id = ?`, [req.params.id]);
     res.json(rows[0]);

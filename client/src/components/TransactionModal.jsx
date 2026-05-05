@@ -11,7 +11,8 @@ const initialForm = {
   type: 'expense',
   category_id: '',
   card_id: '',
-  notes: ''
+  notes: '',
+  paid_by: '',
 };
 
 export default function TransactionModal({ onClose, onSaved, transaction }) {
@@ -22,7 +23,8 @@ export default function TransactionModal({ onClose, onSaved, transaction }) {
     type:         transaction.type,
     category_id:  transaction.category_id  || '',
     card_id:      transaction.card_id      || '',
-    notes:        transaction.notes        || ''
+    notes:        transaction.notes        || '',
+    paid_by:      transaction.paid_by      || '',
   } : initialForm);
 
   const [categories, setCategories] = useState([]);
@@ -203,6 +205,22 @@ export default function TransactionModal({ onClose, onSaved, transaction }) {
             ))}
           </select>
         </div>
+
+        {/* Pago por */}
+        {form.type === 'expense' && (
+          <div>
+            <label className="block text-sm font-medium text-zinc-700 mb-1">Pago por</label>
+            <select
+              value={form.paid_by}
+              onChange={e => setForm(f => ({ ...f, paid_by: e.target.value }))}
+              className="w-full px-3 py-2 border border-zinc-300 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
+            >
+              <option value="">Quem lançou</option>
+              <option value="luan">Luan</option>
+              <option value="barbara">Bárbara</option>
+            </select>
+          </div>
+        )}
 
         {/* Observação */}
         <div>

@@ -40,6 +40,7 @@ export const getTransactions = (params) => api.get('/transactions', { params });
 export const createTransaction = (data) => api.post('/transactions', data);
 export const createInstallments = (data) => api.post('/transactions/installments', data);
 export const updateTransaction = (id, data) => api.put(`/transactions/${id}`, data);
+export const updateTransactionGroup = (group_id, data) => api.put(`/transactions/group/${group_id}`, data);
 export const deleteTransaction = (id) => api.delete(`/transactions/${id}`);
 export const checkDuplicate = (params) => api.get('/transactions/check-duplicate', { params });
 

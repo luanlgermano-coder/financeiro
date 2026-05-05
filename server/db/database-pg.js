@@ -61,7 +61,13 @@ async function initialize() {
     `);
     await client.query(`ALTER TABLE cards ADD COLUMN IF NOT EXISTS due_day INTEGER`);
     await client.query(`ALTER TABLE cards ADD COLUMN IF NOT EXISTS owner TEXT`);
+    await client.query(`ALTER TABLE cards ADD COLUMN IF NOT EXISTS best_purchase_day INTEGER`);
     await client.query(`ALTER TABLE debts ADD COLUMN IF NOT EXISTS due_day INTEGER`);
+    await client.query(`ALTER TABLE transactions ADD COLUMN IF NOT EXISTS installment_group_id TEXT`);
+    await client.query(`ALTER TABLE transactions ADD COLUMN IF NOT EXISTS paid_by TEXT`);
+    await client.query(`ALTER TABLE subscriptions ADD COLUMN IF NOT EXISTS owner TEXT NOT NULL DEFAULT 'casal'`);
+    await client.query(`ALTER TABLE subscriptions ADD COLUMN IF NOT EXISTS duration_months INTEGER`);
+    await client.query(`ALTER TABLE subscriptions ADD COLUMN IF NOT EXISTS start_date TEXT`);
 
     await client.query(`
       CREATE TABLE IF NOT EXISTS transactions (
@@ -173,7 +179,8 @@ async function initialize() {
         (6, 'Educação',    '#8b5cf6', 'book-open'),
         (7, 'Roupas',      '#ec4899', 'shirt'),
         (8, 'Supermercado','#14b8a6', 'shopping-cart'),
-        (9, 'Outros',      '#6b7280', 'tag')
+        (9,  'Outros',      '#6b7280', 'tag'),
+        (10, 'Gasolina',   '#f97316', 'fuel')
       ON CONFLICT (id) DO NOTHING
     `);
     await client.query(

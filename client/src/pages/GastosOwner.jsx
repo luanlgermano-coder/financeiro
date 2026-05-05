@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { Pencil, Trash2, ChevronLeft, ChevronRight, Plus, AlertTriangle, CheckCircle2, XCircle } from 'lucide-react';
-import { getTransactions, createTransaction, createInstallments, updateTransaction, deleteTransaction, checkDuplicate, getCategories, getCards } from '../api';
+import { getTransactions, createTransaction, createInstallments, updateTransaction, updateTransactionGroup, deleteTransaction, checkDuplicate, getCategories, getCards } from '../api';
 import { formatCurrency, formatDate, getMonthOptions, originLabel, originColor } from '../utils/formatters';
 import Modal from '../components/Modal';
 
@@ -11,7 +11,7 @@ const THEME = {
 const LABEL = { luan: 'Luan', barbara: 'Bárbara' };
 
 const today = () => new Date().toISOString().slice(0, 10);
-const emptyForm = { description: '', amount: '', date: today(), category_id: '', card_id: '', notes: '' };
+const emptyForm = { description: '', amount: '', date: today(), category_id: '', card_id: '', notes: '', paid_by: '' };
 
 const CategoryBar = ({ name, color, total, max }) => {
   const pct = max > 0 ? Math.round((total / max) * 100) : 0;
@@ -50,6 +50,15 @@ function DuplicateAlert({ existing, onForce, onCancel }) {
   );
 }
 
+function addMonthsToDate(dateStr) {
+  const [y, m, d] = dateStr.split('-').map(Number);
+  const totalMonths = y * 12 + (m - 1) + 1;
+  const newY = Math.floor(totalMonths / 12);
+  const newM = (totalMonths % 12) + 1;
+  const lastDay = new Date(newY, newM, 0).getDate();
+  return `${newY}-${String(newM).padStart(2, '0')}-${String(Math.min(d, lastDay)).padStart(2, '0')}`;
+}
+
 function GastoForm({ categories, cards, owner, initial, onSaved, onCancel, theme }) {
   const [form, setForm]           = useState(initial || emptyForm);
   const [loading, setLoading]     = useState(false);
@@ -64,11 +73,25 @@ function GastoForm({ categories, cards, owner, initial, onSaved, onCancel, theme
     ? (parseFloat(form.amount) / parcelas).toFixed(2)
     : null;
 
+  // First installment date calculation based on best_purchase_day
+  const selectedCard = cards.find(c => String(c.id) === String(form.card_id));
+  const bestPurchaseDay = selectedCard?.best_purchase_day;
+  let firstInstallDate = form.date;
+  let installDateHint = null;
+  if (parcelado && form.date && bestPurchaseDay) {
+    const purchaseDay = parseInt(form.date.split('-')[2]);
+    if (purchaseDay > bestPurchaseDay) {
+      firstInstallDate = addMonthsToDate(form.date);
+    }
+    const [fy, fm] = firstInstallDate.split('-');
+    installDateHint = new Date(parseInt(fy), parseInt(fm) - 1, 1)
+      .toLocaleString('pt-BR', { month: 'long', year: 'numeric' });
+  }
+
   const submit = async (force = false) => {
     if (!form.description || !form.amount || !form.date) { setError('Preencha descrição, valor e data.'); return; }
     setError('');
 
-    // Parcelada: cria N transações via endpoint dedicado
     if (parcelado && !isEdit) {
       setLoading(true);
       try {
@@ -76,11 +99,12 @@ function GastoForm({ categories, cards, owner, initial, onSaved, onCancel, theme
           description:  form.description,
           total_amount: parseFloat(form.amount),
           installments: parcelas,
-          date:         form.date,
+          date:         firstInstallDate,
           category_id:  form.category_id || undefined,
           card_id:      form.card_id      || undefined,
           owner,
           notes:        form.notes        || undefined,
+          paid_by:      form.paid_by      || undefined,
         });
         setForm(emptyForm);
         setParcelado(false);
@@ -101,7 +125,7 @@ function GastoForm({ categories, cards, owner, initial, onSaved, onCancel, theme
     }
     setLoading(true);
     try {
-      const payload = { ...form, type: 'expense', owner };
+      const payload = { ...form, type: 'expense', owner, paid_by: form.paid_by || null };
       if (isEdit) await updateTransaction(initial.id, payload);
       else        await createTransaction(payload);
       setForm(emptyForm);
@@ -148,22 +172,30 @@ function GastoForm({ categories, cards, owner, initial, onSaved, onCancel, theme
           </label>
 
           {parcelado && (
-            <div className="grid grid-cols-2 gap-3 pl-1">
-              <div>
-                <label className="block text-xs font-medium text-zinc-600 mb-1">Nº de parcelas</label>
-                <select value={parcelas} onChange={e => setParcelas(Number(e.target.value))}
-                  className="w-full px-3 py-2 border border-zinc-300 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500">
-                  {[2,3,4,5,6,7,8,9,10,11,12,15,18,21,24].map(n => (
-                    <option key={n} value={n}>{n}x</option>
-                  ))}
-                </select>
-              </div>
-              <div>
-                <label className="block text-xs font-medium text-zinc-600 mb-1">Valor por parcela</label>
-                <div className="px-3 py-2 bg-violet-50 border border-violet-200 rounded-lg text-sm font-semibold text-violet-700">
-                  {valorParcela ? `R$ ${valorParcela}` : '—'}
+            <div className="space-y-2 pl-1">
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-medium text-zinc-600 mb-1">Nº de parcelas</label>
+                  <select value={parcelas} onChange={e => setParcelas(Number(e.target.value))}
+                    className="w-full px-3 py-2 border border-zinc-300 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500">
+                    {[2,3,4,5,6,7,8,9,10,11,12,15,18,21,24].map(n => (
+                      <option key={n} value={n}>{n}x</option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-zinc-600 mb-1">Valor por parcela</label>
+                  <div className="px-3 py-2 bg-violet-50 border border-violet-200 rounded-lg text-sm font-semibold text-violet-700">
+                    {valorParcela ? `R$ ${valorParcela}` : '—'}
+                  </div>
                 </div>
               </div>
+              {installDateHint && (
+                <div className="flex items-center gap-1.5 text-xs text-violet-700 bg-violet-50 border border-violet-200 rounded-lg px-3 py-2">
+                  <span>Primeira parcela em:</span>
+                  <strong className="capitalize">{installDateHint}</strong>
+                </div>
+              )}
             </div>
           )}
         </div>
@@ -190,12 +222,76 @@ function GastoForm({ categories, cards, owner, initial, onSaved, onCancel, theme
         <textarea rows={2} value={form.notes} onChange={set('notes')} placeholder="Detalhes opcionais…"
           className="w-full px-3 py-2 border border-zinc-300 rounded-lg text-sm resize-none focus:outline-none focus:ring-2 focus:ring-emerald-500" />
       </div>
+      <div>
+        <label className="block text-sm font-medium text-zinc-700 mb-1">Pago por</label>
+        <select value={form.paid_by} onChange={set('paid_by')}
+          className="w-full px-3 py-2 border border-zinc-300 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500">
+          <option value="">Quem lançou</option>
+          <option value="luan">Luan</option>
+          <option value="barbara">Bárbara</option>
+        </select>
+      </div>
       <div className="flex gap-3 pt-1">
         {onCancel && <button onClick={onCancel} className="flex-1 py-2 border border-zinc-300 text-zinc-700 rounded-lg text-sm font-medium hover:bg-zinc-50">Cancelar</button>}
         <button disabled={loading} onClick={() => submit(false)}
           className="flex-1 flex items-center justify-center gap-2 py-2 disabled:opacity-60 text-white rounded-lg text-sm font-semibold transition-colors"
           style={{ backgroundColor: theme.accent }}>
           {loading ? 'Salvando…' : isEdit ? 'Salvar' : parcelado ? `Parcelar em ${parcelas}x` : <><Plus size={14} /> Adicionar</>}
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function GroupEditForm({ target, categories, cards, onSaved, onCancel }) {
+  const [form, setForm]   = useState({ description: target.description, category_id: target.category_id || '', card_id: target.card_id || '' });
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
+  const set = (f) => (e) => setForm(p => ({ ...p, [f]: e.target.value }));
+
+  const submit = async () => {
+    if (!form.description) { setError('Descrição é obrigatória'); return; }
+    setLoading(true);
+    try {
+      await updateTransactionGroup(target.installment_group_id, form);
+      onSaved();
+    } catch (err) {
+      setError(err.response?.data?.error || 'Erro ao salvar');
+    } finally { setLoading(false); }
+  };
+
+  return (
+    <div className="space-y-3">
+      {error && <p className="text-sm text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2">{error}</p>}
+      <p className="text-xs text-zinc-500">
+        Todas as <strong>{target.installment_total}</strong> parcelas terão a mesma descrição, categoria e cartão.
+      </p>
+      <div>
+        <label className="block text-sm font-medium text-zinc-700 mb-1">Descrição *</label>
+        <input type="text" value={form.description} onChange={set('description')} autoFocus
+          className="w-full px-3 py-2 border border-zinc-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-violet-500" />
+      </div>
+      <div>
+        <label className="block text-sm font-medium text-zinc-700 mb-1">Categoria</label>
+        <select value={form.category_id} onChange={set('category_id')}
+          className="w-full px-3 py-2 border border-zinc-300 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-violet-500">
+          <option value="">Sem categoria</option>
+          {categories.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+        </select>
+      </div>
+      <div>
+        <label className="block text-sm font-medium text-zinc-700 mb-1">Cartão / Conta</label>
+        <select value={form.card_id} onChange={set('card_id')}
+          className="w-full px-3 py-2 border border-zinc-300 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-violet-500">
+          <option value="">Não especificado</option>
+          {cards.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+        </select>
+      </div>
+      <div className="flex gap-3 pt-1">
+        <button onClick={onCancel} className="flex-1 py-2 border border-zinc-300 text-zinc-700 rounded-lg text-sm font-medium hover:bg-zinc-50">Cancelar</button>
+        <button disabled={loading} onClick={submit}
+          className="flex-1 py-2 bg-violet-500 hover:bg-violet-600 disabled:opacity-60 text-white rounded-lg text-sm font-semibold">
+          {loading ? 'Salvando…' : 'Salvar todas'}
         </button>
       </div>
     </div>
@@ -212,11 +308,12 @@ export default function GastosOwner({ owner: ownerProp = 'luan' }) {
   const [cards, setCards]               = useState([]);
   const [loading, setLoading]           = useState(true);
   const [editTarget, setEditTarget]     = useState(null);
+  const [installPickTarget, setInstallPickTarget] = useState(null);
+  const [editGroupTarget, setEditGroupTarget]     = useState(null);
   const months   = getMonthOptions(12);
   const [monthIdx, setMonthIdx] = useState(0);
   const currentMonth = months[monthIdx].value;
 
-  // Sincroniza aba quando a prop mudar (troca de rota /gastos/luan ↔ /gastos/barbara)
   useEffect(() => { setActiveOwner(ownerProp); }, [ownerProp]);
 
   const load = useCallback(() => {
@@ -240,7 +337,18 @@ export default function GastosOwner({ owner: ownerProp = 'luan' }) {
     load();
   };
 
-  const total   = transactions.reduce((s, t) => s + t.amount, 0);
+  const handleEditClick = (t) => {
+    if (t.installment_group_id) {
+      setInstallPickTarget(t);
+    } else {
+      setEditTarget(t);
+    }
+  };
+
+  const total         = transactions.reduce((s, t) => s + t.amount, 0);
+  const paidForOtherTotal = transactions
+    .filter(t => t.owner !== owner)
+    .reduce((s, t) => s + t.amount, 0);
   const catMap  = transactions.reduce((acc, t) => {
     const key = t.category_id || 'outros';
     if (!acc[key]) acc[key] = { name: t.category_name || 'Outros', color: t.category_color || '#6b7280', total: 0 };
@@ -300,6 +408,11 @@ export default function GastosOwner({ owner: ownerProp = 'luan' }) {
         <div className={`bg-white rounded-2xl p-5 shadow-sm border-l-4 ${theme.border}`}>
           <p className="text-xs font-medium text-zinc-500 uppercase tracking-wider">Total gasto</p>
           <p className={`text-2xl font-bold mt-1 ${theme.text}`}>{formatCurrency(total)}</p>
+          {paidForOtherTotal > 0 && (
+            <p className="text-xs text-violet-500 mt-1 font-medium">
+              Do qual {formatCurrency(paidForOtherTotal)} por conta da {owner === 'luan' ? 'Bárbara' : 'Luan'}
+            </p>
+          )}
         </div>
         <div className="bg-white rounded-2xl p-5 shadow-sm border-l-4 border-zinc-400">
           <p className="text-xs font-medium text-zinc-500 uppercase tracking-wider">Maior categoria</p>
@@ -394,6 +507,11 @@ export default function GastosOwner({ owner: ownerProp = 'luan' }) {
                               </div>
                             );
                           })()}
+                          {t.owner !== owner && (
+                            <span className="inline-block text-xs bg-violet-100 text-violet-700 px-1.5 py-0.5 rounded font-semibold mt-0.5">
+                              Conta da {t.owner === 'barbara' ? 'Bárbara' : 'Luan'}
+                            </span>
+                          )}
                           {t.notes    && <p className="text-xs text-zinc-400 truncate max-w-[180px]">{t.notes}</p>}
                           {t.card_name && <p className="text-xs text-zinc-400">{t.card_name}</p>}
                         </td>
@@ -410,7 +528,7 @@ export default function GastosOwner({ owner: ownerProp = 'luan' }) {
                         </td>
                         <td className="px-4 py-3">
                           <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                            <button onClick={() => setEditTarget(t)} className="p-1.5 rounded-lg hover:bg-zinc-100 text-zinc-400 hover:text-zinc-600"><Pencil size={13} /></button>
+                            <button onClick={() => handleEditClick(t)} className="p-1.5 rounded-lg hover:bg-zinc-100 text-zinc-400 hover:text-zinc-600"><Pencil size={13} /></button>
                             <button onClick={() => handleDelete(t.id)} className="p-1.5 rounded-lg hover:bg-red-50 text-zinc-400 hover:text-red-500"><Trash2 size={13} /></button>
                           </div>
                         </td>
@@ -428,9 +546,56 @@ export default function GastosOwner({ owner: ownerProp = 'luan' }) {
         <Modal title="Editar Gasto" onClose={() => setEditTarget(null)}>
           <GastoForm
             categories={categories} cards={cards} owner={owner} theme={theme}
-            initial={{ id: editTarget.id, description: editTarget.description, amount: String(editTarget.amount), date: editTarget.date, category_id: editTarget.category_id || '', card_id: editTarget.card_id || '', notes: editTarget.notes || '' }}
+            initial={{ id: editTarget.id, description: editTarget.description, amount: String(editTarget.amount), date: editTarget.date, category_id: editTarget.category_id || '', card_id: editTarget.card_id || '', notes: editTarget.notes || '', paid_by: editTarget.paid_by || '' }}
             onSaved={() => { setEditTarget(null); load(); }}
             onCancel={() => setEditTarget(null)}
+          />
+        </Modal>
+      )}
+
+      {installPickTarget && (
+        <Modal title="Compra parcelada" onClose={() => setInstallPickTarget(null)}>
+          <div className="space-y-4">
+            <p className="text-sm text-zinc-600">
+              Esta é uma compra parcelada ({installPickTarget.installment_total} parcelas). O que deseja editar?
+            </p>
+            <div className="space-y-2">
+              <button
+                onClick={() => { setEditTarget(installPickTarget); setInstallPickTarget(null); }}
+                className="w-full py-3 px-4 border border-zinc-200 rounded-xl text-left hover:bg-zinc-50 transition-colors"
+              >
+                <p className="text-sm font-semibold text-zinc-800">Editar só esta parcela</p>
+                <p className="text-xs text-zinc-400 mt-0.5">
+                  Altera apenas o lançamento {installPickTarget.installment_current}/{installPickTarget.installment_total}
+                </p>
+              </button>
+              <button
+                onClick={() => {
+                  const base = installPickTarget.description.replace(/\s*\(\d+\/\d+\)$/, '').trim();
+                  setEditGroupTarget({ ...installPickTarget, description: base });
+                  setInstallPickTarget(null);
+                }}
+                className="w-full py-3 px-4 border border-violet-200 bg-violet-50 rounded-xl text-left hover:bg-violet-100 transition-colors"
+              >
+                <p className="text-sm font-semibold text-violet-800">Editar todas as {installPickTarget.installment_total} parcelas</p>
+                <p className="text-xs text-violet-500 mt-0.5">Altera descrição, categoria e cartão de todo o grupo</p>
+              </button>
+            </div>
+            <button onClick={() => setInstallPickTarget(null)} className="w-full py-2 text-sm text-zinc-400 hover:text-zinc-600 transition-colors">
+              Cancelar
+            </button>
+          </div>
+        </Modal>
+      )}
+
+      {editGroupTarget && (
+        <Modal title="Editar todas as parcelas" onClose={() => setEditGroupTarget(null)}>
+          <GroupEditForm
+            target={editGroupTarget}
+            categories={categories}
+            cards={cards}
+            onSaved={() => { setEditGroupTarget(null); load(); }}
+            onCancel={() => setEditGroupTarget(null)}
           />
         </Modal>
       )}

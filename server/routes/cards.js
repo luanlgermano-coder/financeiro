@@ -27,10 +27,10 @@ router.post('/', async (req, res) => {
 
 router.put('/:id', async (req, res) => {
   try {
-    const { name, color, due_day, owner } = req.body;
+    const { name, color, due_day, owner, best_purchase_day } = req.body;
     const { rows } = await query(
-      `UPDATE cards SET name=?, color=?, due_day=?, owner=? WHERE id=? RETURNING *`,
-      [name, color, due_day || null, owner || null, req.params.id]
+      `UPDATE cards SET name=?, color=?, due_day=?, owner=?, best_purchase_day=? WHERE id=? RETURNING *`,
+      [name, color, due_day || null, owner || null, best_purchase_day || null, req.params.id]
     );
     res.json(rows[0]);
   } catch (err) {

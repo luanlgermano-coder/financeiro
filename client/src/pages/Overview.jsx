@@ -683,7 +683,12 @@ export default function Overview() {
                     </div>
                     <div className="bg-red-50 rounded-xl p-3">
                       <p className="text-xs text-zinc-500 font-medium">Total gasto</p>
-                      <p className="text-lg font-bold mt-0.5 text-red-500">{formatCurrency(s.expense)}</p>
+                      <p className="text-lg font-bold mt-0.5 text-red-500">{formatCurrency(s.expense + (s.paidForOtherExpense || 0))}</p>
+                      {s.paidForOtherExpense > 0 && (
+                        <p className="text-xs text-violet-500 font-medium mt-0.5">
+                          Do qual {formatCurrency(s.paidForOtherExpense)} por conta da {key === 'luan' ? 'Bárbara' : 'Luan'}
+                        </p>
+                      )}
                     </div>
                     <div className={`rounded-xl p-3 ${s.balance >= 0 ? 'bg-emerald-50' : 'bg-red-50'}`}>
                       <p className="text-xs text-zinc-500 font-medium">Saldo</p>

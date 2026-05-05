@@ -1,8 +1,9 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { Pencil, Trash2, Filter, ChevronLeft, ChevronRight } from 'lucide-react';
-import { getTransactions, deleteTransaction, getCategories } from '../api';
+import { getTransactions, deleteTransaction, updateTransactionGroup, getCategories, getCards } from '../api';
 import { formatCurrency, formatDate, getMonthOptions, originLabel, originColor } from '../utils/formatters';
 import TransactionModal from '../components/TransactionModal';
+import Modal from '../components/Modal';
 
 const CategoryBar = ({ name, color, total, max }) => {
   const pct = max > 0 ? Math.round((total / max) * 100) : 0;
@@ -17,11 +18,69 @@ const CategoryBar = ({ name, color, total, max }) => {
   );
 };
 
+function GroupEditForm({ target, categories, cards, onSaved, onCancel }) {
+  const [form, setForm]   = useState({ description: target.description, category_id: target.category_id || '', card_id: target.card_id || '' });
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
+  const set = (f) => (e) => setForm(p => ({ ...p, [f]: e.target.value }));
+
+  const submit = async () => {
+    if (!form.description) { setError('Descrição é obrigatória'); return; }
+    setLoading(true);
+    try {
+      await updateTransactionGroup(target.installment_group_id, form);
+      onSaved();
+    } catch (err) {
+      setError(err.response?.data?.error || 'Erro ao salvar');
+    } finally { setLoading(false); }
+  };
+
+  return (
+    <div className="space-y-3">
+      {error && <p className="text-sm text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2">{error}</p>}
+      <p className="text-xs text-zinc-500">
+        Todas as <strong>{target.installment_total}</strong> parcelas terão a mesma descrição, categoria e cartão.
+      </p>
+      <div>
+        <label className="block text-sm font-medium text-zinc-700 mb-1">Descrição *</label>
+        <input type="text" value={form.description} onChange={set('description')} autoFocus
+          className="w-full px-3 py-2 border border-zinc-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-violet-500" />
+      </div>
+      <div>
+        <label className="block text-sm font-medium text-zinc-700 mb-1">Categoria</label>
+        <select value={form.category_id} onChange={set('category_id')}
+          className="w-full px-3 py-2 border border-zinc-300 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-violet-500">
+          <option value="">Sem categoria</option>
+          {categories.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+        </select>
+      </div>
+      <div>
+        <label className="block text-sm font-medium text-zinc-700 mb-1">Cartão / Conta</label>
+        <select value={form.card_id} onChange={set('card_id')}
+          className="w-full px-3 py-2 border border-zinc-300 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-violet-500">
+          <option value="">Não especificado</option>
+          {cards.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+        </select>
+      </div>
+      <div className="flex gap-3 pt-1">
+        <button onClick={onCancel} className="flex-1 py-2 border border-zinc-300 text-zinc-700 rounded-lg text-sm font-medium hover:bg-zinc-50">Cancelar</button>
+        <button disabled={loading} onClick={submit}
+          className="flex-1 py-2 bg-violet-500 hover:bg-violet-600 disabled:opacity-60 text-white rounded-lg text-sm font-semibold">
+          {loading ? 'Salvando…' : 'Salvar todas'}
+        </button>
+      </div>
+    </div>
+  );
+}
+
 export default function Gastos() {
   const [transactions, setTransactions] = useState([]);
   const [categories, setCategories] = useState([]);
+  const [cards, setCards] = useState([]);
   const [loading, setLoading] = useState(true);
   const [editTarget, setEditTarget] = useState(null);
+  const [installPickTarget, setInstallPickTarget] = useState(null);
+  const [editGroupTarget, setEditGroupTarget] = useState(null);
   const [filterCategory, setFilterCategory] = useState('');
   const months = getMonthOptions(12);
   const [monthIdx, setMonthIdx] = useState(0);
@@ -31,10 +90,12 @@ export default function Gastos() {
     setLoading(true);
     Promise.all([
       getTransactions({ month: currentMonth, type: 'expense', category_id: filterCategory || undefined }),
-      getCategories()
-    ]).then(([txRes, catRes]) => {
+      getCategories(),
+      getCards(),
+    ]).then(([txRes, catRes, cardRes]) => {
       setTransactions(txRes.data);
       setCategories(catRes.data);
+      setCards(cardRes.data);
     }).catch(console.error).finally(() => setLoading(false));
   }, [currentMonth, filterCategory]);
 
@@ -49,6 +110,14 @@ export default function Gastos() {
     if (!window.confirm('Remover este lançamento?')) return;
     await deleteTransaction(id);
     load();
+  };
+
+  const handleEditClick = (t) => {
+    if (t.installment_group_id) {
+      setInstallPickTarget(t);
+    } else {
+      setEditTarget(t);
+    }
   };
 
   // Stats
@@ -169,7 +238,19 @@ export default function Gastos() {
                   {(t.category_name || 'O')[0]}
                 </div>
                 <div className="flex-1 min-w-0">
-                  <p className="text-sm font-medium text-zinc-800 truncate">{t.description}</p>
+                  <div className="flex items-center gap-1.5">
+                    <p className="text-sm font-medium text-zinc-800 truncate">
+                      {t.description.replace(/\s*\(\d+\/\d+\)$/, '')}
+                    </p>
+                    {t.installment_group_id && (() => {
+                      const m = t.description.match(/\((\d+)\/(\d+)\)$/);
+                      return m ? (
+                        <span className="flex-shrink-0 text-xs bg-violet-100 text-violet-700 px-1.5 py-0.5 rounded font-semibold">
+                          {m[1]}/{m[2]}
+                        </span>
+                      ) : null;
+                    })()}
+                  </div>
                   <div className="flex items-center gap-2 mt-0.5 flex-wrap">
                     <span className="text-xs text-zinc-400">{formatDate(t.date)}</span>
                     {t.category_name && <span className="text-xs text-zinc-400">· {t.category_name}</span>}
@@ -181,7 +262,7 @@ export default function Gastos() {
                   -{formatCurrency(t.amount)}
                 </div>
                 <div className="flex items-center gap-1">
-                  <button onClick={() => setEditTarget(t)} className="p-1.5 rounded-lg hover:bg-zinc-100 text-zinc-400 hover:text-zinc-600 transition-colors">
+                  <button onClick={() => handleEditClick(t)} className="p-1.5 rounded-lg hover:bg-zinc-100 text-zinc-400 hover:text-zinc-600 transition-colors">
                     <Pencil size={14} />
                   </button>
                   <button onClick={() => handleDelete(t.id)} className="p-1.5 rounded-lg hover:bg-red-50 text-zinc-400 hover:text-red-500 transition-colors">
@@ -200,6 +281,53 @@ export default function Gastos() {
           onClose={() => setEditTarget(null)}
           onSaved={() => { setEditTarget(null); load(); }}
         />
+      )}
+
+      {installPickTarget && (
+        <Modal title="Compra parcelada" onClose={() => setInstallPickTarget(null)}>
+          <div className="space-y-4">
+            <p className="text-sm text-zinc-600">
+              Esta é uma compra parcelada ({installPickTarget.installment_total} parcelas). O que deseja editar?
+            </p>
+            <div className="space-y-2">
+              <button
+                onClick={() => { setEditTarget(installPickTarget); setInstallPickTarget(null); }}
+                className="w-full py-3 px-4 border border-zinc-200 rounded-xl text-left hover:bg-zinc-50 transition-colors"
+              >
+                <p className="text-sm font-semibold text-zinc-800">Editar só esta parcela</p>
+                <p className="text-xs text-zinc-400 mt-0.5">
+                  Altera apenas o lançamento {installPickTarget.installment_current}/{installPickTarget.installment_total}
+                </p>
+              </button>
+              <button
+                onClick={() => {
+                  const base = installPickTarget.description.replace(/\s*\(\d+\/\d+\)$/, '').trim();
+                  setEditGroupTarget({ ...installPickTarget, description: base });
+                  setInstallPickTarget(null);
+                }}
+                className="w-full py-3 px-4 border border-violet-200 bg-violet-50 rounded-xl text-left hover:bg-violet-100 transition-colors"
+              >
+                <p className="text-sm font-semibold text-violet-800">Editar todas as {installPickTarget.installment_total} parcelas</p>
+                <p className="text-xs text-violet-500 mt-0.5">Altera descrição, categoria e cartão de todo o grupo</p>
+              </button>
+            </div>
+            <button onClick={() => setInstallPickTarget(null)} className="w-full py-2 text-sm text-zinc-400 hover:text-zinc-600 transition-colors">
+              Cancelar
+            </button>
+          </div>
+        </Modal>
+      )}
+
+      {editGroupTarget && (
+        <Modal title="Editar todas as parcelas" onClose={() => setEditGroupTarget(null)}>
+          <GroupEditForm
+            target={editGroupTarget}
+            categories={categories}
+            cards={cards}
+            onSaved={() => { setEditGroupTarget(null); load(); }}
+            onCancel={() => setEditGroupTarget(null)}
+          />
+        </Modal>
       )}
     </div>
   );

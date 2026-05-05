@@ -73,10 +73,11 @@ export default function Configuracoes() {
   const [loadingMonth, setLoadingMonth] = useState(false);
 
   // — cards —
-  const [cards, setCards]             = useState([]);
-  const [cardDueDays, setCardDueDays] = useState({});
-  const [cardOwners,  setCardOwners]  = useState({});
-  const [savingCard, setSavingCard]   = useState(null);
+  const [cards, setCards]                         = useState([]);
+  const [cardDueDays, setCardDueDays]             = useState({});
+  const [cardOwners,  setCardOwners]              = useState({});
+  const [cardBestDays, setCardBestDays]           = useState({});
+  const [savingCard, setSavingCard]               = useState(null);
 
   // — bills —
   const [bills, setBills]         = useState([]);
@@ -98,6 +99,7 @@ export default function Configuracoes() {
       setCards(r.data);
       setCardDueDays(Object.fromEntries(r.data.map(c => [c.id, c.due_day ?? ''])));
       setCardOwners(Object.fromEntries(r.data.map(c => [c.id, c.owner ?? ''])));
+      setCardBestDays(Object.fromEntries(r.data.map(c => [c.id, c.best_purchase_day ?? ''])));
     }).catch(() => {});
     getBills().then(r => setBills(r.data)).catch(() => {});
   }, []);
@@ -137,9 +139,10 @@ export default function Configuracoes() {
   const handleSaveCard = async (card) => {
     setSavingCard(card.id);
     try {
-      const due_day = cardDueDays[card.id] !== '' ? parseInt(cardDueDays[card.id]) : null;
-      const owner   = cardOwners[card.id]  || null;
-      await updateCard(card.id, { name: card.name, color: card.color, due_day, owner });
+      const due_day           = cardDueDays[card.id] !== '' ? parseInt(cardDueDays[card.id]) : null;
+      const owner             = cardOwners[card.id]  || null;
+      const best_purchase_day = cardBestDays[card.id] !== '' ? parseInt(cardBestDays[card.id]) : null;
+      await updateCard(card.id, { name: card.name, color: card.color, due_day, owner, best_purchase_day });
       flash('Cartão salvo.');
     } catch (err) { flash('Erro ao salvar cartão.', true); }
     finally { setSavingCard(null); }
@@ -260,11 +263,13 @@ export default function Configuracoes() {
         ) : (
           <div className="space-y-3">
             {cards.map(card => {
-              const origDay   = String(card.due_day ?? '');
-              const origOwner = card.owner ?? '';
-              const curDay    = String(cardDueDays[card.id] ?? '');
-              const curOwner  = cardOwners[card.id] ?? '';
-              const changed   = curDay !== origDay || curOwner !== origOwner;
+              const origDay     = String(card.due_day ?? '');
+              const origOwner   = card.owner ?? '';
+              const origBest    = String(card.best_purchase_day ?? '');
+              const curDay      = String(cardDueDays[card.id] ?? '');
+              const curOwner    = cardOwners[card.id] ?? '';
+              const curBest     = String(cardBestDays[card.id] ?? '');
+              const changed     = curDay !== origDay || curOwner !== origOwner || curBest !== origBest;
               return (
                 <div key={card.id} className="flex items-center gap-2 flex-wrap sm:flex-nowrap">
                   <div
@@ -280,15 +285,30 @@ export default function Configuracoes() {
                     <option value="">Dono</option>
                     {OWNER_OPTS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
                   </select>
-                  <input
-                    type="number"
-                    min="1"
-                    max="31"
-                    placeholder="Dia"
-                    value={curDay}
-                    onChange={e => setCardDueDays(prev => ({ ...prev, [card.id]: e.target.value }))}
-                    className="w-16 px-2 py-1.5 border border-zinc-300 rounded-lg text-sm text-center focus:outline-none focus:ring-2 focus:ring-blue-400"
-                  />
+                  <div className="flex flex-col items-center gap-0.5">
+                    <span className="text-[10px] text-zinc-400 leading-none">Vencimento</span>
+                    <input
+                      type="number"
+                      min="1"
+                      max="31"
+                      placeholder="Dia"
+                      value={curDay}
+                      onChange={e => setCardDueDays(prev => ({ ...prev, [card.id]: e.target.value }))}
+                      className="w-16 px-2 py-1.5 border border-zinc-300 rounded-lg text-sm text-center focus:outline-none focus:ring-2 focus:ring-blue-400"
+                    />
+                  </div>
+                  <div className="flex flex-col items-center gap-0.5">
+                    <span className="text-[10px] text-zinc-400 leading-none">Melhor compra</span>
+                    <input
+                      type="number"
+                      min="1"
+                      max="31"
+                      placeholder="Dia"
+                      value={curBest}
+                      onChange={e => setCardBestDays(prev => ({ ...prev, [card.id]: e.target.value }))}
+                      className="w-16 px-2 py-1.5 border border-violet-300 rounded-lg text-sm text-center focus:outline-none focus:ring-2 focus:ring-violet-400"
+                    />
+                  </div>
                   <button
                     onClick={() => handleSaveCard(card)}
                     disabled={!changed || savingCard === card.id}
