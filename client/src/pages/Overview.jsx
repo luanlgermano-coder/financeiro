@@ -1,9 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import {
-  AreaChart, Area, LineChart, Line,
-  XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend
-} from 'recharts';
-import {
   TrendingUp, TrendingDown, Landmark, Wallet,
   ArrowUpRight, ArrowDownRight, ChevronLeft, ChevronRight,
   ArrowUp, ArrowDown, AlertTriangle, CheckCircle2, Lightbulb, Target, CreditCard,
@@ -76,22 +72,6 @@ const OriginBadge = ({ origin }) => (
     {originLabel(origin)}
   </span>
 );
-
-const CustomTooltip = ({ active, payload, label }) => {
-  if (active && payload && payload.length) {
-    return (
-      <div className="bg-white border border-zinc-200 rounded-xl p-3 shadow-lg text-sm">
-        <p className="font-semibold text-zinc-700 mb-1">{label}</p>
-        {payload.map(p => (
-          <p key={p.dataKey} style={{ color: p.color }}>
-            {p.name}: {formatCurrency(p.value)}
-          </p>
-        ))}
-      </div>
-    );
-  }
-  return null;
-};
 
 function daysUntilDue(due_day) {
   const today = new Date();
@@ -661,6 +641,7 @@ export default function Overview() {
               const s = data.ownerSummary[key] || { income: 0, expense: 0, balance: 0, prevBalance: 0, debtTotal: 0 };
               const balanceDiff = s.balance - (s.prevBalance ?? s.balance);
               const incomeShare = data.income > 0 ? Math.round((s.income / data.income) * 100) : 0;
+              const otherName = key === 'luan' ? 'Bárbara' : 'Luan';
               return (
                 <div key={key} className={`bg-white rounded-2xl p-5 shadow-sm border-l-4 ${border}`}>
                   <div className="flex items-center justify-between mb-4">
@@ -686,10 +667,20 @@ export default function Overview() {
                       <p className="text-lg font-bold mt-0.5 text-red-500">{formatCurrency(s.expense + (s.paidForOtherExpense || 0))}</p>
                       {s.paidForOtherExpense > 0 && (
                         <p className="text-xs text-violet-500 font-medium mt-0.5">
-                          Do qual {formatCurrency(s.paidForOtherExpense)} por conta da {key === 'luan' ? 'Bárbara' : 'Luan'}
+                          Do qual {formatCurrency(s.paidForOtherExpense)} por {otherName}
                         </p>
                       )}
                     </div>
+                    {(s.monthlyDebt > 0 || s.subShare > 0) && (
+                      <div className="bg-orange-50 rounded-xl p-3">
+                        <p className="text-xs text-zinc-500 font-medium">Compromissos fixos</p>
+                        <p className="text-lg font-bold mt-0.5 text-orange-500">{formatCurrency((s.monthlyDebt || 0) + (s.subShare || 0))}</p>
+                        <div className="text-xs text-zinc-400 mt-0.5 space-y-0.5">
+                          {s.monthlyDebt > 0 && <p>Dívidas: {formatCurrency(s.monthlyDebt)}</p>}
+                          {s.subShare > 0 && <p>Assinaturas: {formatCurrency(s.subShare)}</p>}
+                        </div>
+                      </div>
+                    )}
                     <div className={`rounded-xl p-3 ${s.balance >= 0 ? 'bg-emerald-50' : 'bg-red-50'}`}>
                       <p className="text-xs text-zinc-500 font-medium">Saldo</p>
                       <div className="flex items-center gap-1 mt-0.5">
@@ -709,31 +700,11 @@ export default function Overview() {
                         </div>
                       )}
                     </div>
-                    <div className="bg-amber-50 rounded-xl p-3">
-                      <p className="text-xs text-zinc-500 font-medium">Total em dívidas</p>
-                      <p className="text-lg font-bold mt-0.5 text-amber-600">{formatCurrency(s.debtTotal)}</p>
-                    </div>
                   </div>
                 </div>
               );
             })}
           </div>
-        </div>
-      )}
-
-      {/* Evolução consolidada das dívidas */}
-      {data.debtEvolution && data.debtEvolution.some(p => p.balance > 0) && (
-        <div className="bg-white rounded-2xl p-5 shadow-sm hover:shadow-md transition-shadow">
-          <h3 className="font-semibold text-zinc-900 mb-6">Evolução das Dívidas — Últimos 6 Meses</h3>
-          <ResponsiveContainer width="100%" height={200}>
-            <LineChart data={data.debtEvolution} margin={{ top: 4, right: 8, left: 0, bottom: 0 }}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#f4f4f5" />
-              <XAxis dataKey="month" tick={{ fontSize: 12, fill: '#71717a' }} />
-              <YAxis tick={{ fontSize: 11, fill: '#71717a' }} tickFormatter={v => `R$${(v/1000).toFixed(0)}k`} width={52} />
-              <Tooltip formatter={v => [formatCurrency(v), 'Saldo devedor']} contentStyle={{ borderRadius: 8, border: '1px solid #e4e4e7', fontSize: 12 }} />
-              <Line type="monotone" dataKey="balance" stroke="#f59e0b" strokeWidth={2.5} dot={{ r: 4, fill: '#f59e0b' }} activeDot={{ r: 6 }} />
-            </LineChart>
-          </ResponsiveContainer>
         </div>
       )}
 
@@ -846,34 +817,6 @@ export default function Overview() {
         </div>
       )}
 
-      {/* Evolução mensal */}
-      <div className="bg-white rounded-2xl p-5 shadow-sm hover:shadow-md transition-shadow">
-        <h3 className="font-semibold text-zinc-900 mb-6">Evolução dos Últimos 6 Meses</h3>
-        <ResponsiveContainer width="100%" height={240}>
-          <AreaChart data={data.monthlyEvolution} margin={{ top: 4, right: 8, left: 0, bottom: 0 }}>
-            <defs>
-              <linearGradient id="gradIncome" x1="0" y1="0" x2="0" y2="1">
-                <stop offset="5%"  stopColor="#10b981" stopOpacity={0.3} />
-                <stop offset="95%" stopColor="#10b981" stopOpacity={0.03} />
-              </linearGradient>
-              <linearGradient id="gradExpense" x1="0" y1="0" x2="0" y2="1">
-                <stop offset="5%"  stopColor="#3b82f6" stopOpacity={0.25} />
-                <stop offset="95%" stopColor="#3b82f6" stopOpacity={0.03} />
-              </linearGradient>
-            </defs>
-            <CartesianGrid strokeDasharray="3 3" stroke="#f4f4f5" />
-            <XAxis dataKey="month" tick={{ fontSize: 12, fill: '#71717a' }} />
-            <YAxis tick={{ fontSize: 11, fill: '#71717a' }} tickFormatter={v => `R$${(v/1000).toFixed(0)}k`} width={52} />
-            <Tooltip content={<CustomTooltip />} />
-            <Legend
-              formatter={(value) => value === 'income' ? 'Receitas' : 'Gastos'}
-              wrapperStyle={{ fontSize: 12 }}
-            />
-            <Area type="monotone" dataKey="income"  name="income"  stroke="#10b981" strokeWidth={2.5} fill="url(#gradIncome)"  dot={{ r: 4, fill: '#10b981' }} activeDot={{ r: 6 }} />
-            <Area type="monotone" dataKey="expense" name="expense" stroke="#3b82f6" strokeWidth={2.5} fill="url(#gradExpense)" dot={{ r: 4, fill: '#3b82f6' }} activeDot={{ r: 6 }} />
-          </AreaChart>
-        </ResponsiveContainer>
-      </div>
     </div>
   );
 }

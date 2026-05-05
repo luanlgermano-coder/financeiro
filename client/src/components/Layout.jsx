@@ -15,7 +15,6 @@ const ROUTE_LABELS = {
   '/metas':              'Metas Financeiras',
   '/assinaturas':        'Assinaturas',
   '/whatsapp':           'WhatsApp',
-  '/upload':             'Upload Fatura',
   '/configuracoes':      'Configurações',
 };
 

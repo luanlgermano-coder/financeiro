@@ -130,6 +130,45 @@ router.put('/group/:group_id', async (req, res) => {
   }
 });
 
+// POST /api/transactions/recalculate-dates
+// One-time (or manual) migration: corrects billing dates based on each card's best_purchase_day.
+// Run automatically once on deploy via database-pg.js initialize().
+router.post('/recalculate-dates', async (req, res) => {
+  try {
+    const { rows: cards } = await query(
+      `SELECT id, best_purchase_day FROM cards WHERE best_purchase_day IS NOT NULL AND best_purchase_day > 0`
+    );
+
+    let checked = 0, corrected = 0;
+
+    for (const card of cards) {
+      const { rows: txs } = await query(
+        `SELECT id, date FROM transactions WHERE card_id = ? AND type = 'expense'`,
+        [card.id]
+      );
+      for (const tx of txs) {
+        checked++;
+        const [y, m, d] = tx.date.split('-').map(Number);
+        if (d > card.best_purchase_day) {
+          const totalMonths = y * 12 + (m - 1) + 1;
+          const newY  = Math.floor(totalMonths / 12);
+          const newM  = (totalMonths % 12) + 1;
+          const newD  = Math.min(d, new Date(newY, newM, 0).getDate());
+          const newDate = `${newY}-${String(newM).padStart(2,'0')}-${String(newD).padStart(2,'0')}`;
+          if (newDate !== tx.date) {
+            await query(`UPDATE transactions SET date = ? WHERE id = ?`, [newDate, tx.id]);
+            corrected++;
+          }
+        }
+      }
+    }
+
+    res.json({ ok: true, checked, corrected });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // POST /api/transactions
 router.post('/', async (req, res) => {
   try {

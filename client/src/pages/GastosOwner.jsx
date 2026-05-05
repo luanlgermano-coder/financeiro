@@ -73,20 +73,22 @@ function GastoForm({ categories, cards, owner, initial, onSaved, onCancel, theme
     ? (parseFloat(form.amount) / parcelas).toFixed(2)
     : null;
 
-  // First installment date calculation based on best_purchase_day
+  // Billing date: adjusted for card's best_purchase_day (applies to both single and installment)
   const selectedCard = cards.find(c => String(c.id) === String(form.card_id));
   const bestPurchaseDay = selectedCard?.best_purchase_day;
-  let firstInstallDate = form.date;
-  let installDateHint = null;
-  if (parcelado && form.date && bestPurchaseDay) {
+  let billingDate = form.date;
+  let billingHint = null;
+  if (form.date && bestPurchaseDay) {
     const purchaseDay = parseInt(form.date.split('-')[2]);
     if (purchaseDay > bestPurchaseDay) {
-      firstInstallDate = addMonthsToDate(form.date);
+      billingDate = addMonthsToDate(form.date);
+      const [by, bm] = billingDate.split('-');
+      const monthLabel = new Date(parseInt(by), parseInt(bm) - 1, 1)
+        .toLocaleString('pt-BR', { month: 'long', year: 'numeric' });
+      billingHint = `Esta compra cairá na fatura de ${monthLabel} pois foi feita após o fechamento (dia ${bestPurchaseDay}).`;
     }
-    const [fy, fm] = firstInstallDate.split('-');
-    installDateHint = new Date(parseInt(fy), parseInt(fm) - 1, 1)
-      .toLocaleString('pt-BR', { month: 'long', year: 'numeric' });
   }
+  const firstInstallDate = billingDate;
 
   const submit = async (force = false) => {
     if (!form.description || !form.amount || !form.date) { setError('Preencha descrição, valor e data.'); return; }
@@ -125,7 +127,7 @@ function GastoForm({ categories, cards, owner, initial, onSaved, onCancel, theme
     }
     setLoading(true);
     try {
-      const payload = { ...form, type: 'expense', owner, paid_by: form.paid_by || null };
+      const payload = { ...form, date: billingDate, type: 'expense', owner, paid_by: form.paid_by || null };
       if (isEdit) await updateTransaction(initial.id, payload);
       else        await createTransaction(payload);
       setForm(emptyForm);
@@ -190,10 +192,9 @@ function GastoForm({ categories, cards, owner, initial, onSaved, onCancel, theme
                   </div>
                 </div>
               </div>
-              {installDateHint && (
-                <div className="flex items-center gap-1.5 text-xs text-violet-700 bg-violet-50 border border-violet-200 rounded-lg px-3 py-2">
-                  <span>Primeira parcela em:</span>
-                  <strong className="capitalize">{installDateHint}</strong>
+              {billingHint && (
+                <div className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
+                  Primeira parcela em <strong className="capitalize">{billingDate.slice(0, 7).split('-').reverse().join('/')}</strong>
                 </div>
               )}
             </div>
@@ -216,6 +217,11 @@ function GastoForm({ categories, cards, owner, initial, onSaved, onCancel, theme
           <option value="">Não especificado</option>
           {cards.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
         </select>
+        {billingHint && !parcelado && (
+          <p className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 mt-1.5">
+            {billingHint}
+          </p>
+        )}
       </div>
       <div>
         <label className="block text-sm font-medium text-zinc-700 mb-1">Observação</label>

@@ -8,7 +8,6 @@ import GastosOwner from './pages/GastosOwner';
 import DividasOwner from './pages/DividasOwner';
 import Assinaturas from './pages/Assinaturas';
 import WhatsApp from './pages/WhatsApp';
-import UploadFatura from './pages/UploadFatura';
 import Configuracoes from './pages/Configuracoes';
 import Metas from './pages/Metas';
 import { getToken, clearToken } from './api';
@@ -48,7 +47,6 @@ export default function App() {
                   <Route path="/dividas/barbara"     element={<DividasOwner owner="barbara" />} />
                   <Route path="/assinaturas"         element={<Assinaturas />} />
                   <Route path="/whatsapp"            element={<WhatsApp />} />
-                  <Route path="/upload"              element={<UploadFatura />} />
                   <Route path="/configuracoes"       element={<Configuracoes />} />
                   <Route path="/metas"               element={<Metas />} />
                   <Route path="/lancamentos"         element={<Navigate to="/" replace />} />

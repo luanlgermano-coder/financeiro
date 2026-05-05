@@ -95,12 +95,15 @@ router.get('/', async (req, res) => {
     const ownerSummary = {};
     for (const owner of ['luan', 'barbara']) {
       const [
-        { rows: [oIncome]       },
-        { rows: [oExpense]      },
-        { rows: [oDebt]         },
-        { rows: [oPrevIncome]   },
-        { rows: [oPrevExpense]  },
-        { rows: [oPaidForOther] },
+        { rows: [oIncome]        },
+        { rows: [oExpense]       },
+        { rows: [oDebt]          },
+        { rows: [oPrevIncome]    },
+        { rows: [oPrevExpense]   },
+        { rows: [oPaidForOther]  },
+        { rows: [oMonthlyDebt]   },
+        { rows: [oOwnSub]        },
+        { rows: [oCasalSub]      },
       ] = await Promise.all([
         query(`SELECT COALESCE(SUM(amount),0) as t FROM transactions WHERE owner=? AND type='income'  AND date BETWEEN ? AND ?`, [owner, startDate, endDate]),
         query(`SELECT COALESCE(SUM(amount),0) as t FROM transactions WHERE owner=? AND type='expense' AND date BETWEEN ? AND ?`, [owner, startDate, endDate]),
@@ -108,14 +111,20 @@ router.get('/', async (req, res) => {
         query(`SELECT COALESCE(SUM(amount),0) as t FROM transactions WHERE owner=? AND type='income'  AND date BETWEEN ? AND ?`, [owner, prevStart, prevEnd]),
         query(`SELECT COALESCE(SUM(amount),0) as t FROM transactions WHERE owner=? AND type='expense' AND date BETWEEN ? AND ?`, [owner, prevStart, prevEnd]),
         query(`SELECT COALESCE(SUM(amount),0) as t FROM transactions WHERE owner!=? AND paid_by=? AND type='expense' AND date BETWEEN ? AND ?`, [owner, owner, startDate, endDate]),
+        query(`SELECT COALESCE(SUM(monthly_payment),0) as t FROM debts WHERE owner=? AND total_amount > paid_amount`, [owner]),
+        query(`SELECT COALESCE(SUM(amount),0) as t FROM subscriptions WHERE owner=? AND active=1`, [owner]),
+        query(`SELECT COALESCE(SUM(amount),0) as t FROM subscriptions WHERE owner='casal' AND active=1`),
       ]);
+      const subShare = parseFloat((oOwnSub.t + oCasalSub.t * 0.5).toFixed(2));
       ownerSummary[owner] = {
-        income:             oIncome.t,
-        expense:            oExpense.t,
+        income:              oIncome.t,
+        expense:             oExpense.t,
         paidForOtherExpense: oPaidForOther.t,
-        balance:            oIncome.t - oExpense.t - oPaidForOther.t,
-        prevBalance:        oPrevIncome.t - oPrevExpense.t,
-        debtTotal:          oDebt.t,
+        monthlyDebt:         oMonthlyDebt.t,
+        subShare,
+        balance:             parseFloat((oIncome.t - oExpense.t - oPaidForOther.t - oMonthlyDebt.t - subShare).toFixed(2)),
+        prevBalance:         oPrevIncome.t - oPrevExpense.t,
+        debtTotal:           oDebt.t,
       };
     }
 

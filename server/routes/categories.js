@@ -40,6 +40,15 @@ router.put('/:id', async (req, res) => {
 
 router.delete('/:id', async (req, res) => {
   try {
+    const { rows: [countRow] } = await query(
+      `SELECT COUNT(*) as count FROM transactions WHERE category_id = ?`, [req.params.id]
+    );
+    const count = parseInt(countRow.count);
+    if (count > 0) {
+      return res.status(409).json({
+        error: `Não é possível excluir: ${count} transação(ões) usam esta categoria.`
+      });
+    }
     await query(`DELETE FROM categories WHERE id = ?`, [req.params.id]);
     res.json({ success: true });
   } catch (err) {

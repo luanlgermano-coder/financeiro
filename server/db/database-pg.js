@@ -62,6 +62,7 @@ async function initialize() {
     await client.query(`ALTER TABLE cards ADD COLUMN IF NOT EXISTS due_day INTEGER`);
     await client.query(`ALTER TABLE cards ADD COLUMN IF NOT EXISTS owner TEXT`);
     await client.query(`ALTER TABLE cards ADD COLUMN IF NOT EXISTS best_purchase_day INTEGER`);
+    await client.query(`ALTER TABLE cards ADD COLUMN IF NOT EXISTS type TEXT`);
     await client.query(`ALTER TABLE debts ADD COLUMN IF NOT EXISTS due_day INTEGER`);
     await client.query(`ALTER TABLE transactions ADD COLUMN IF NOT EXISTS installment_group_id TEXT`);
     await client.query(`ALTER TABLE transactions ADD COLUMN IF NOT EXISTS paid_by TEXT`);
@@ -216,6 +217,41 @@ async function initialize() {
         ('spouse_name', 'Bárbara')
       ON CONFLICT (key) DO NOTHING
     `);
+
+    // One-time migration: recalculate billing dates based on best_purchase_day
+    const { rows: [migDone] } = await client.query(
+      `SELECT 1 FROM settings WHERE key = 'migration_billing_dates_v1' LIMIT 1`
+    );
+    if (!migDone) {
+      const { rows: cards } = await client.query(
+        `SELECT id, best_purchase_day FROM cards WHERE best_purchase_day IS NOT NULL AND best_purchase_day > 0`
+      );
+      let corrected = 0;
+      for (const card of cards) {
+        const { rows: txs } = await client.query(
+          `SELECT id, date FROM transactions WHERE card_id = $1 AND type = 'expense'`,
+          [card.id]
+        );
+        for (const tx of txs) {
+          const [y, m, d] = tx.date.split('-').map(Number);
+          if (d > card.best_purchase_day) {
+            const totalMonths = y * 12 + (m - 1) + 1;
+            const newY = Math.floor(totalMonths / 12);
+            const newM = (totalMonths % 12) + 1;
+            const newD = Math.min(d, new Date(newY, newM, 0).getDate());
+            const newDate = `${newY}-${String(newM).padStart(2,'0')}-${String(newD).padStart(2,'0')}`;
+            if (newDate !== tx.date) {
+              await client.query(`UPDATE transactions SET date = $1 WHERE id = $2`, [newDate, tx.id]);
+              corrected++;
+            }
+          }
+        }
+      }
+      await client.query(
+        `INSERT INTO settings (key, value) VALUES ('migration_billing_dates_v1', 'done') ON CONFLICT (key) DO NOTHING`
+      );
+      if (corrected > 0) console.log(`✅ Corrigidas ${corrected} datas de faturamento`);
+    }
 
     console.log('✅ PostgreSQL inicializado');
   } finally {

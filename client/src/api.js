@@ -41,6 +41,7 @@ export const createTransaction = (data) => api.post('/transactions', data);
 export const createInstallments = (data) => api.post('/transactions/installments', data);
 export const updateTransaction = (id, data) => api.put(`/transactions/${id}`, data);
 export const updateTransactionGroup = (group_id, data) => api.put(`/transactions/group/${group_id}`, data);
+export const recalculateDates = () => api.post('/transactions/recalculate-dates');
 export const deleteTransaction = (id) => api.delete(`/transactions/${id}`);
 export const checkDuplicate = (params) => api.get('/transactions/check-duplicate', { params });
 
@@ -75,18 +76,6 @@ export const getDebtPayments = (id) => api.get(`/debts/${id}/payments`);
 // WhatsApp
 export const getWhatsAppLogs = () => api.get('/webhook/whatsapp/logs');
 export const getWhatsAppStats = () => api.get('/webhook/whatsapp/stats');
-
-// Upload
-export const uploadFatura = (file) => {
-  const formData = new FormData();
-  formData.append('pdf', file);
-  return api.post('/upload/fatura', formData, {
-    headers: { 'Content-Type': 'multipart/form-data' },
-    timeout: 120000
-  });
-};
-export const confirmUpload = (transactions, card_id, owner) =>
-  api.post('/upload/confirm', { transactions, card_id, owner });
 
 // Settings
 export const getSettings = () => api.get('/settings');

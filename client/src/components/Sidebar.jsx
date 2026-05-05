@@ -2,7 +2,7 @@ import React, { createContext, useContext, useState } from 'react';
 import { NavLink } from 'react-router-dom';
 import {
   LayoutDashboard, CreditCard, Repeat2, Landmark,
-  MessageCircle, FileUp, TrendingUp, ChevronDown, ChevronRight,
+  MessageCircle, TrendingUp, ChevronDown, ChevronRight,
   User, ArrowDownCircle, Settings, LogOut, X, Target
 } from 'lucide-react';
 
@@ -111,7 +111,6 @@ export default function Sidebar({ isOpen, onClose, onLogout }) {
             <NavItem to="/metas"         icon={Target}        label="Metas"          iconColor="text-emerald-400" />
             <NavItem to="/assinaturas"   icon={Repeat2}       label="Assinaturas"    iconColor="text-violet-400" />
             <NavItem to="/whatsapp"      icon={MessageCircle} label="WhatsApp"       iconColor="text-green-400" />
-            <NavItem to="/upload"        icon={FileUp}        label="Upload Fatura"  iconColor="text-sky-400" />
             <NavItem to="/configuracoes" icon={Settings}      label="Configurações"  iconColor="text-zinc-400" />
           </Section>
         </nav>
