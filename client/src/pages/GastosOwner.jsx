@@ -432,46 +432,17 @@ export default function GastosOwner({ owner: ownerProp = 'luan' }) {
       </div>
 
       <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
-        {/* Coluna esquerda: form + category bars */}
-        <div className="xl:col-span-1 space-y-4">
-          <div className="bg-white rounded-2xl p-5 shadow-sm sticky top-[69px]">
+        {/* Coluna esquerda: somente o formulário (sticky) */}
+        <div className="xl:col-span-1">
+          <div className="bg-white rounded-2xl p-5 shadow-sm xl:sticky xl:top-[69px]">
             <h3 className="font-semibold text-zinc-900 mb-4">Novo Gasto</h3>
             <GastoForm categories={categories} cards={cards} owner={owner} theme={theme}
               onSaved={() => { load(); window.dispatchEvent(new CustomEvent('transaction-saved')); }} />
           </div>
-          {catList.length > 0 && (
-            <div className="bg-white rounded-2xl p-5 shadow-sm">
-              <h3 className="font-semibold text-zinc-900 mb-4">Por Categoria</h3>
-              <div className="space-y-3">
-                {catList.map(c => <CategoryBar key={c.name} {...c} max={maxCat} />)}
-              </div>
-            </div>
-          )}
-
-          {cardList.length > 0 && (
-            <div className="bg-white rounded-2xl p-5 shadow-sm">
-              <h3 className="font-semibold text-zinc-900 mb-4">Por Cartão</h3>
-              <div className="space-y-2.5">
-                {cardList.map(c => (
-                  <div key={c.name} className="flex items-center gap-3">
-                    <div className="w-3 h-3 rounded-full flex-shrink-0" style={{ backgroundColor: c.color }} />
-                    <span className="text-sm text-zinc-600 flex-1 truncate">{c.name}</span>
-                    <span className="text-sm font-semibold text-zinc-800">{formatCurrency(c.total)}</span>
-                  </div>
-                ))}
-              </div>
-              <div className="mt-3 pt-3 border-t border-zinc-100 flex justify-between items-center">
-                <span className="text-xs text-zinc-400">Total com cartão</span>
-                <span className="text-sm font-bold text-zinc-900">
-                  {formatCurrency(cardList.reduce((s, c) => s + c.total, 0))}
-                </span>
-              </div>
-            </div>
-          )}
         </div>
 
-        {/* Coluna direita: tabela */}
-        <div className="xl:col-span-2">
+        {/* Coluna direita: tabela + por categoria + por cartão */}
+        <div className="xl:col-span-2 space-y-4">
           <div className="bg-white rounded-2xl shadow-sm overflow-hidden">
             <div className="px-5 py-4 border-b border-zinc-100 flex items-center justify-between">
               <h3 className="font-semibold text-zinc-900">Gastos de {months[monthIdx].label}</h3>
@@ -545,6 +516,39 @@ export default function GastosOwner({ owner: ownerProp = 'luan' }) {
               </div>
             )}
           </div>
+
+          {(catList.length > 0 || cardList.length > 0) && (
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              {catList.length > 0 && (
+                <div className="bg-white rounded-2xl p-5 shadow-sm">
+                  <h3 className="font-semibold text-zinc-900 mb-4">Por Categoria</h3>
+                  <div className="space-y-3">
+                    {catList.map(c => <CategoryBar key={c.name} {...c} max={maxCat} />)}
+                  </div>
+                </div>
+              )}
+              {cardList.length > 0 && (
+                <div className="bg-white rounded-2xl p-5 shadow-sm">
+                  <h3 className="font-semibold text-zinc-900 mb-4">Por Cartão</h3>
+                  <div className="space-y-2.5">
+                    {cardList.map(c => (
+                      <div key={c.name} className="flex items-center gap-3">
+                        <div className="w-3 h-3 rounded-full flex-shrink-0" style={{ backgroundColor: c.color }} />
+                        <span className="text-sm text-zinc-600 flex-1 truncate">{c.name}</span>
+                        <span className="text-sm font-semibold text-zinc-800">{formatCurrency(c.total)}</span>
+                      </div>
+                    ))}
+                  </div>
+                  <div className="mt-3 pt-3 border-t border-zinc-100 flex justify-between items-center">
+                    <span className="text-xs text-zinc-400">Total com cartão</span>
+                    <span className="text-sm font-bold text-zinc-900">
+                      {formatCurrency(cardList.reduce((s, c) => s + c.total, 0))}
+                    </span>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
         </div>
       </div>
 
