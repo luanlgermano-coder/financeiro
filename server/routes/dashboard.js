@@ -205,6 +205,28 @@ router.get('/', async (req, res) => {
       SELECT * FROM goals WHERE current_amount < target_amount ORDER BY deadline ASC LIMIT 3
     `);
 
+    // Spending per card for current month
+    const { rows: cardSpending } = await query(`
+      SELECT ca.id, ca.name, ca.color, ca.type,
+             COALESCE(SUM(t.amount),0) as total,
+             COUNT(t.id)::int           as count
+      FROM transactions t
+      JOIN cards ca ON t.card_id = ca.id
+      WHERE t.type = 'expense' AND t.date BETWEEN ? AND ?
+      GROUP BY ca.id, ca.name, ca.color, ca.type
+      ORDER BY total DESC
+    `, [startDate, endDate]);
+
+    // Pix / Débito: no card OR card type is conta/debito/poupanca
+    const { rows: [pixDebitoRow] } = await query(`
+      SELECT COALESCE(SUM(t.amount),0) as total,
+             COUNT(t.id)::int           as count
+      FROM transactions t
+      LEFT JOIN cards ca ON t.card_id = ca.id
+      WHERE t.type = 'expense' AND t.date BETWEEN ? AND ?
+        AND (t.card_id IS NULL OR ca.type IN ('conta', 'debito', 'poupanca'))
+    `, [startDate, endDate]);
+
     res.json({
       income, expense,
       debtTotal:         debtRow.total,
@@ -223,6 +245,8 @@ router.get('/', async (req, res) => {
       debtEvolution,
       installmentSummary,
       totalMonthlyInstallments,
+      cardSpending,
+      pixDebito: { total: pixDebitoRow.total, count: pixDebitoRow.count },
     });
   } catch (err) {
     console.error(err);
