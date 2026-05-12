@@ -214,6 +214,7 @@ export default function Overview() {
 
   const [dues, setDues]     = useState([]);
   const [showPaid, setShowPaid] = useState(false);
+  const [showAllInstallments, setShowAllInstallments] = useState(false);
 
   const load = useCallback(() => {
     setLoading(true);
@@ -390,6 +391,39 @@ export default function Overview() {
         }`}>{healthPhrase(data.healthPercent)}</p>
       </div>
 
+      {/* Insights do Mês */}
+      {insights.length > 0 && (
+        <div className="bg-white rounded-2xl p-5 shadow-sm hover:shadow-md transition-shadow">
+          <div className="flex items-center gap-2 mb-4">
+            <Lightbulb size={18} className="text-amber-400" />
+            <h3 className="font-semibold text-zinc-900">Insights do Mês</h3>
+          </div>
+          <div className="space-y-3">
+            {insights.map((ins, i) => {
+              const Icon = ins.icon;
+              const styles = {
+                warning:  { wrap: 'bg-red-50 border-red-200',         icon: 'text-red-500',     title: 'text-red-800',     action: 'text-red-600' },
+                tip:      { wrap: 'bg-amber-50 border-amber-200',     icon: 'text-amber-500',   title: 'text-amber-800',   action: 'text-amber-700' },
+                positive: { wrap: 'bg-emerald-50 border-emerald-200', icon: 'text-emerald-500', title: 'text-emerald-800', action: 'text-emerald-700' },
+              };
+              const s = styles[ins.type] || styles.tip;
+              return (
+                <div key={i} className={`border rounded-xl px-4 py-3.5 ${s.wrap}`}>
+                  <div className="flex items-start gap-3">
+                    <Icon size={16} className={`${s.icon} flex-shrink-0 mt-0.5`} />
+                    <div className="space-y-1">
+                      <p className={`text-sm font-semibold ${s.title}`}>{ins.title}</p>
+                      <p className="text-sm text-zinc-600">{ins.body}</p>
+                      <p className={`text-xs font-semibold ${s.action}`}>→ {ins.action}</p>
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
       {/* ═══════════════════════════════════════════════════════
           SEÇÃO 2 — O QUE IMPORTA AGORA
       ═══════════════════════════════════════════════════════ */}
@@ -542,11 +576,11 @@ export default function Overview() {
             )}
 
             {/* Pix / Débito */}
-            <div className={`rounded-2xl p-5 shadow-sm ${
-              data.pixDebito?.total > 0
-                ? 'bg-gradient-to-br from-violet-500 to-purple-600'
-                : 'bg-white border border-zinc-100'
-            }`}>
+            <div className="rounded-2xl p-5 shadow-sm"
+              style={data.pixDebito?.total > 0
+                ? { backgroundColor: '#1a2332', border: '1px solid #30363d' }
+                : { backgroundColor: 'white',   border: '1px solid #f3f4f6' }
+              }>
               <div className="flex items-center justify-between">
                 <div>
                   <div className="flex items-center gap-2 mb-1">
@@ -715,7 +749,7 @@ export default function Overview() {
               </span>
             </div>
             <div className="space-y-3">
-              {data.installmentSummary.map((item, i) => {
+              {(showAllInstallments ? data.installmentSummary : data.installmentSummary.slice(0, 4)).map((item, i) => {
                 const pct = item.total > 0 ? Math.round((item.current / item.total) * 100) : 0;
                 return (
                   <div key={i} className="border border-zinc-100 rounded-xl p-4">
@@ -747,6 +781,12 @@ export default function Overview() {
                 );
               })}
             </div>
+            {data.installmentSummary.length > 4 && (
+              <button onClick={() => setShowAllInstallments(s => !s)}
+                className="w-full text-xs text-violet-600 hover:text-violet-700 font-medium py-1.5 transition-colors">
+                {showAllInstallments ? '▲ Mostrar menos' : `▼ Ver todos (${data.installmentSummary.length})`}
+              </button>
+            )}
             <div className="mt-4 pt-4 border-t border-zinc-100 flex items-center justify-between">
               <p className="text-sm text-zinc-500">Total mensal em parcelas</p>
               <p className="text-sm font-bold text-violet-600">{formatCurrency(data.totalMonthlyInstallments)}</p>
@@ -796,38 +836,6 @@ export default function Overview() {
           </div>
         )}
 
-        {/* Insights — ao final */}
-        {insights.length > 0 && (
-          <div className="bg-white rounded-2xl p-5 shadow-sm hover:shadow-md transition-shadow">
-            <div className="flex items-center gap-2 mb-4">
-              <Lightbulb size={18} className="text-amber-400" />
-              <h3 className="font-semibold text-zinc-900">Insights do Mês</h3>
-            </div>
-            <div className="space-y-3">
-              {insights.map((ins, i) => {
-                const Icon = ins.icon;
-                const styles = {
-                  warning:  { wrap: 'bg-red-50 border-red-200',       icon: 'text-red-500',     title: 'text-red-800',     action: 'text-red-600' },
-                  tip:      { wrap: 'bg-amber-50 border-amber-200',   icon: 'text-amber-500',   title: 'text-amber-800',   action: 'text-amber-700' },
-                  positive: { wrap: 'bg-emerald-50 border-emerald-200', icon: 'text-emerald-500', title: 'text-emerald-800', action: 'text-emerald-700' },
-                };
-                const s = styles[ins.type] || styles.tip;
-                return (
-                  <div key={i} className={`border rounded-xl px-4 py-3.5 ${s.wrap}`}>
-                    <div className="flex items-start gap-3">
-                      <Icon size={16} className={`${s.icon} flex-shrink-0 mt-0.5`} />
-                      <div className="space-y-1">
-                        <p className={`text-sm font-semibold ${s.title}`}>{ins.title}</p>
-                        <p className="text-sm text-zinc-600">{ins.body}</p>
-                        <p className={`text-xs font-semibold ${s.action}`}>→ {ins.action}</p>
-                      </div>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-        )}
       </div>
     </div>
   );

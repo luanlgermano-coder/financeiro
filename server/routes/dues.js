@@ -41,16 +41,18 @@ router.get('/', async (req, res) => {
         category: b.category,
         checked:  checkedSet.has(`bill-${b.id}`),
       })),
-      ...cardsWithDue.map(c => ({
-        type:    'card',
-        id:      c.id,
-        name:    c.name,
-        color:   c.color,
-        due_day: c.due_day,
-        owner:   c.owner,
-        amount:  spendMap[c.id] || 0,
-        checked: checkedSet.has(`card-${c.id}`),
-      })),
+      ...cardsWithDue
+        .map(c => ({
+          type:    'card',
+          id:      c.id,
+          name:    c.name,
+          color:   c.color,
+          due_day: c.due_day,
+          owner:   c.owner,
+          amount:  spendMap[c.id] || 0,
+          checked: checkedSet.has(`card-${c.id}`),
+        }))
+        .filter(c => c.amount > 0),
       ...debtsWithDue.map(d => ({
         type:    'debt',
         id:      d.id,
