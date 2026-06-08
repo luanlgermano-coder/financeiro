@@ -17,17 +17,21 @@ router.get('/', async (req, res) => {
       { rows: [debtRow]    },
       { rows: [monthlyDebtRow] },
       { rows: [subRow]     },
+      { rows: [billsRow]   },
     ] = await Promise.all([
       query(`SELECT COALESCE(SUM(amount),0) as total FROM transactions WHERE type='income'  AND date BETWEEN ? AND ?`, [startDate, endDate]),
       query(`SELECT COALESCE(SUM(amount),0) as total FROM transactions WHERE type='expense' AND date BETWEEN ? AND ?`, [startDate, endDate]),
       query(`SELECT COALESCE(SUM(total_amount - paid_amount),0) as total FROM debts WHERE total_amount > paid_amount`),
       query(`SELECT COALESCE(SUM(monthly_payment),0) as total FROM debts WHERE total_amount > paid_amount`),
-      query(`SELECT COALESCE(SUM(amount),0) as total FROM subscriptions WHERE active=1`),
+      query(`SELECT COALESCE(SUM(amount),0) as total FROM subscriptions WHERE active=true`),
+      query(`SELECT COALESCE(SUM(amount),0) as total FROM bills WHERE active=true`),
     ]);
 
-    const income  = incomeRow.total;
-    const expense = expenseRow.total;
-    const totalCommitted = expense + monthlyDebtRow.total + subRow.total;
+    const income     = incomeRow.total;
+    const expense    = expenseRow.total;
+    const billsTotal = parseFloat(billsRow.total);
+    // Dívidas NÃO entram no totalCommitted: as parcelas já estão dentro de expense
+    const totalCommitted = expense + billsTotal + subRow.total;
     const healthPercent  = income > 0 ? Math.min(100, Math.round((totalCommitted / income) * 100)) : 0;
 
     // Previous month
@@ -112,8 +116,8 @@ router.get('/', async (req, res) => {
         query(`SELECT COALESCE(SUM(amount),0) as t FROM transactions WHERE owner=? AND type='expense' AND date BETWEEN ? AND ?`, [owner, prevStart, prevEnd]),
         query(`SELECT COALESCE(SUM(amount),0) as t FROM transactions WHERE owner!=? AND paid_by=? AND type='expense' AND date BETWEEN ? AND ?`, [owner, owner, startDate, endDate]),
         query(`SELECT COALESCE(SUM(monthly_payment),0) as t FROM debts WHERE owner=? AND total_amount > paid_amount`, [owner]),
-        query(`SELECT COALESCE(SUM(amount),0) as t FROM subscriptions WHERE owner=? AND active=1`, [owner]),
-        query(`SELECT COALESCE(SUM(amount),0) as t FROM subscriptions WHERE owner='casal' AND active=1`),
+        query(`SELECT COALESCE(SUM(amount),0) as t FROM subscriptions WHERE owner=? AND active=true`, [owner]),
+        query(`SELECT COALESCE(SUM(amount),0) as t FROM subscriptions WHERE owner='casal' AND active=true`),
       ]);
       const subShare = parseFloat((oOwnSub.t + oCasalSub.t * 0.5).toFixed(2));
       ownerSummary[owner] = {
@@ -232,6 +236,7 @@ router.get('/', async (req, res) => {
       debtTotal:         debtRow.total,
       monthlyDebt:       monthlyDebtRow.total,
       subscriptionTotal: subRow.total,
+      billsTotal,
       surplus:           income - totalCommitted,
       healthPercent,
       prevMonthIncome:   prevIncomeRow.total,

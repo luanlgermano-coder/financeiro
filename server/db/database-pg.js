@@ -96,7 +96,7 @@ async function initialize() {
         amount      FLOAT8 NOT NULL,
         billing_day INTEGER NOT NULL DEFAULT 1,
         card_id     INTEGER REFERENCES cards(id) ON DELETE SET NULL,
-        active      INTEGER NOT NULL DEFAULT 1,
+        active      BOOLEAN NOT NULL DEFAULT true,
         created_at  TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       )
     `);
@@ -153,7 +153,7 @@ async function initialize() {
         due_day  INTEGER NOT NULL CHECK (due_day BETWEEN 1 AND 31),
         owner    TEXT NOT NULL DEFAULT 'casal',
         category TEXT,
-        active   INTEGER NOT NULL DEFAULT 1,
+        active   BOOLEAN NOT NULL DEFAULT true,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       )
     `);
@@ -217,6 +217,23 @@ async function initialize() {
         ('spouse_name', 'Bárbara')
       ON CONFLICT (key) DO NOTHING
     `);
+
+    // Migrate active columns from INTEGER to BOOLEAN (idempotent)
+    const { rows: [subColType] } = await client.query(
+      `SELECT data_type FROM information_schema.columns WHERE table_name='subscriptions' AND column_name='active' AND table_schema='public'`
+    );
+    if (subColType?.data_type === 'integer') {
+      await client.query(`ALTER TABLE subscriptions ALTER COLUMN active TYPE BOOLEAN USING active::boolean`);
+    }
+    const { rows: [billColType] } = await client.query(
+      `SELECT data_type FROM information_schema.columns WHERE table_name='bills' AND column_name='active' AND table_schema='public'`
+    );
+    if (billColType?.data_type === 'integer') {
+      await client.query(`ALTER TABLE bills ALTER COLUMN active TYPE BOOLEAN USING active::boolean`);
+    }
+
+    // Add budget column to categories
+    await client.query(`ALTER TABLE categories ADD COLUMN IF NOT EXISTS budget FLOAT8`);
 
     // One-time migration: recalculate billing dates based on best_purchase_day
     const { rows: [migDone] } = await client.query(

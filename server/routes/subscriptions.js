@@ -14,10 +14,10 @@ router.get('/', async (req, res) => {
 
     // Auto-deactivate subscriptions that have passed their duration
     await query(`
-      UPDATE subscriptions SET active = 0
+      UPDATE subscriptions SET active = false
       WHERE duration_months IS NOT NULL
         AND start_date IS NOT NULL
-        AND active = 1
+        AND active = true
         AND (start_date::date + (duration_months * INTERVAL '1 month')) <= CURRENT_DATE
     `);
 
@@ -42,7 +42,7 @@ router.post('/', async (req, res) => {
     if (!name || !amount) return res.status(400).json({ error: 'Nome e valor são obrigatórios' });
     const { rows: [ins] } = await query(
       `INSERT INTO subscriptions (name, amount, billing_day, card_id, active, owner, duration_months, start_date)
-       VALUES (?, ?, ?, ?, 1, ?, ?, ?) RETURNING id`,
+       VALUES (?, ?, ?, ?, true, ?, ?, ?) RETURNING id`,
       [name, parseFloat(amount), billing_day || 1, card_id || null,
        owner || 'casal', duration_months || null, start_date || null]
     );
@@ -59,7 +59,7 @@ router.put('/:id', async (req, res) => {
     await query(
       `UPDATE subscriptions SET name=?, amount=?, billing_day=?, card_id=?, active=?, owner=?, duration_months=?, start_date=? WHERE id=?`,
       [name, parseFloat(amount), billing_day, card_id || null,
-       active !== undefined ? (active ? 1 : 0) : 1,
+       active !== undefined ? Boolean(active) : true,
        owner || 'casal',
        duration_months || null,
        start_date || null,

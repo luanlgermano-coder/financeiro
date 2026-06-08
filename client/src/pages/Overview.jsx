@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
   TrendingUp, TrendingDown, Landmark, Wallet,
   ArrowUpRight, ArrowDownRight, ChevronLeft, ChevronRight,
@@ -99,7 +99,15 @@ function buildInsights(data) {
     categoryBreakdown, prevCategoryBreakdown,
     debtTotal, monthlyDebt,
     upcomingGoals = [],
+    monthlyEvolution = [],
   } = data;
+
+  // 3-month average: monthlyEvolution indices 2,3,4 = 3,2,1 months ago
+  const recentMonths = monthlyEvolution.slice(2, 5).filter(m => m.expense > 0);
+  const avg3Expense = recentMonths.length > 0
+    ? recentMonths.reduce((s, m) => s + m.expense, 0) / recentMonths.length
+    : prevMonthExpense;
+  const avgLabel = recentMonths.length >= 2 ? 'da média dos últimos 3 meses' : 'do mês passado';
 
   if (income > 0 && expense === 0) {
     insights.push({ type: 'tip', icon: Lightbulb, title: 'Nenhum gasto registrado ainda',
@@ -108,8 +116,8 @@ function buildInsights(data) {
     return insights;
   }
 
-  if (prevMonthExpense > 0) {
-    const pctDiff = (expense - prevMonthExpense) / prevMonthExpense;
+  if (avg3Expense > 0) {
+    const pctDiff = (expense - avg3Expense) / avg3Expense;
     if (pctDiff > 0.20) {
       let biggestCat = null, biggestDiff = 0;
       if (prevCategoryBreakdown?.length > 0 && categoryBreakdown.length > 0) {
@@ -121,16 +129,16 @@ function buildInsights(data) {
       }
       const pct = Math.round(pctDiff * 100);
       insights.push({ type: 'warning', icon: TrendingUp,
-        title: `Gastos ${pct}% acima do mês passado`,
+        title: `Gastos ${pct}% acima ${avgLabel}`,
         body: biggestCat
           ? `A categoria "${biggestCat.name}" foi a que mais cresceu (+${formatCurrency(biggestDiff)}).`
-          : `Você gastou ${formatCurrency(expense - prevMonthExpense)} a mais que no mês anterior.`,
+          : `Você gastou ${formatCurrency(expense - avg3Expense)} a mais que ${avgLabel}.`,
         action: `Revise os gastos em "${biggestCat?.name ?? 'suas principais categorias'}" para retomar o controle.` });
     } else if (pctDiff < -0.10) {
       const pct = Math.round(Math.abs(pctDiff) * 100);
       insights.push({ type: 'positive', icon: TrendingDown,
-        title: `Gastos ${pct}% menores que o mês passado`,
-        body: `Você economizou ${formatCurrency(Math.abs(expense - prevMonthExpense))} em relação ao mês anterior.`,
+        title: `Gastos ${pct}% menores que ${avgLabel}`,
+        body: `Você economizou ${formatCurrency(Math.abs(expense - avg3Expense))} em relação ${avgLabel}.`,
         action: 'Continue assim! Considere destinar a diferença para suas metas.' });
     }
   }
@@ -206,8 +214,10 @@ function healthPhrase(pct) {
 
 // ─── Main ─────────────────────────────────────────────────────────────────────
 export default function Overview() {
-  const [data, setData]     = useState(null);
-  const [loading, setLoading] = useState(true);
+  const [data, setData]         = useState(null);
+  const [loading, setLoading]   = useState(true);
+  const [loadError, setLoadError] = useState(false);
+  const retryTimer = useRef(null);
   const months  = getMonthOptions(12);
   const [monthIdx, setMonthIdx] = useState(0);
   const currentMonth = months[monthIdx].value;
@@ -217,10 +227,24 @@ export default function Overview() {
   const [showAllInstallments, setShowAllInstallments] = useState(false);
 
   const load = useCallback(() => {
+    if (retryTimer.current) { clearInterval(retryTimer.current); retryTimer.current = null; }
     setLoading(true);
     getDashboard(currentMonth)
-      .then(r => setData(r.data))
-      .catch(console.error)
+      .then(r => { setData(r.data); setLoadError(false); })
+      .catch(() => {
+        setLoadError(true);
+        retryTimer.current = setInterval(() => {
+          getDashboard(currentMonth)
+            .then(r => {
+              setData(r.data);
+              setLoadError(false);
+              setLoading(false);
+              clearInterval(retryTimer.current);
+              retryTimer.current = null;
+            })
+            .catch(() => {});
+        }, 10000);
+      })
       .finally(() => setLoading(false));
   }, [currentMonth]);
 
@@ -228,7 +252,10 @@ export default function Overview() {
     getDues(currentMonth).then(r => setDues(r.data)).catch(console.error);
   }, [currentMonth]);
 
-  useEffect(() => { load(); }, [load]);
+  useEffect(() => {
+    load();
+    return () => { if (retryTimer.current) { clearInterval(retryTimer.current); retryTimer.current = null; } };
+  }, [load]);
   useEffect(() => { loadDues(); }, [loadDues]);
   useEffect(() => {
     const handler = () => load();
@@ -245,12 +272,26 @@ export default function Overview() {
     setDues(prev => prev.map(d => d.type === item.type && d.id === item.id ? { ...d, checked: false } : d));
   };
 
-  if (loading) return (
-    <div className="flex items-center justify-center h-64">
-      <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-emerald-500" />
+  if (!data) return (
+    <div className="space-y-4">
+      {loadError && (
+        <div className="bg-amber-50 border border-amber-200 rounded-xl px-4 py-3 text-sm text-amber-700 flex items-center gap-2">
+          <Clock size={15} className="flex-shrink-0 animate-spin" />
+          Servidor acordando… isso pode levar até 1 minuto. Tentando novamente.
+        </div>
+      )}
+      <div className="animate-pulse space-y-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
+          {[...Array(4)].map((_, i) => <div key={i} className="bg-zinc-200 rounded-2xl h-28" />)}
+        </div>
+        <div className="bg-zinc-100 rounded-2xl h-20" />
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          <div className="bg-zinc-100 rounded-2xl h-48" />
+          <div className="bg-zinc-100 rounded-2xl h-48" />
+        </div>
+      </div>
     </div>
   );
-  if (!data) return <p className="text-zinc-500">Erro ao carregar dados.</p>;
 
   const maxCategory = data.categoryBreakdown.length > 0 ? Math.max(...data.categoryBreakdown.map(c => c.total)) : 1;
   const insights    = buildInsights(data);
@@ -354,7 +395,7 @@ export default function Overview() {
           sub="Total de receitas registradas" />
         <StatCard label="Sobra estimada" value={data.surplus} icon={TrendingUp}
           gradient={data.surplus >= 0 ? "bg-gradient-to-br from-teal-500 to-cyan-600" : "bg-gradient-to-br from-red-400 to-red-600"}
-          sub="Renda − Gastos − Dívidas − Assinaturas" />
+          sub="Renda − Gastos − Contas fixas − Assinaturas" />
         <StatCard label="Total gasto" value={data.expense} icon={TrendingDown}
           gradient="bg-gradient-to-br from-red-500 to-rose-600"
           sub={`${data.categoryBreakdown.length} categorias`} />
@@ -362,6 +403,41 @@ export default function Overview() {
           gradient="bg-gradient-to-br from-amber-500 to-orange-500"
           sub={`Parcelas: ${formatCurrency(data.monthlyDebt)}/mês`} hideable />
       </div>
+
+      {/* Projeção do Mês */}
+      {monthIdx === 0 && data.expense > 0 && (() => {
+        const now = new Date();
+        const daysPassed = now.getDate();
+        const daysInMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate();
+        const dailyAvg = data.expense / daysPassed;
+        const projected = Math.round(dailyAvg * daysInMonth);
+        const isOver = data.income > 0 && projected > data.income;
+        const pctOfIncome = data.income > 0 ? Math.round((projected / data.income) * 100) : null;
+        return (
+          <div className={`rounded-2xl p-5 shadow-sm border ${isOver ? 'bg-red-50 border-red-200' : 'bg-white border-zinc-100'}`}>
+            <div className="flex items-center justify-between">
+              <div>
+                <p className={`text-xs font-semibold uppercase tracking-wider mb-1 ${isOver ? 'text-red-500' : 'text-zinc-500'}`}>
+                  Projeção do Mês
+                </p>
+                <p className={`text-2xl font-extrabold tracking-tight ${isOver ? 'text-red-600' : 'text-zinc-800'}`}>
+                  {formatCurrency(projected)}
+                </p>
+                <p className={`text-xs mt-1 ${isOver ? 'text-red-500' : 'text-zinc-400'}`}>
+                  {isOver
+                    ? `Projeção ultrapassa a renda em ${formatCurrency(projected - data.income)}`
+                    : `No ritmo atual, você vai gastar ${formatCurrency(projected)} este mês`}
+                  {pctOfIncome !== null && ` — ${pctOfIncome}% da renda`}
+                </p>
+              </div>
+              <div className={`text-right text-xs ${isOver ? 'text-red-400' : 'text-zinc-400'} space-y-0.5`}>
+                <p>Dia {daysPassed} de {daysInMonth}</p>
+                <p>{formatCurrency(Math.round(dailyAvg))}/dia</p>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
 
       {/* Saúde Financeira */}
       <div className="bg-white rounded-2xl p-5 shadow-sm hover:shadow-md transition-shadow">

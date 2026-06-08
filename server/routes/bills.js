@@ -6,7 +6,7 @@ const { query } = require('../db/database-pg');
 router.get('/', async (req, res) => {
   try {
     const { owner } = req.query;
-    let sql = 'SELECT * FROM bills WHERE active = 1';
+    let sql = 'SELECT * FROM bills WHERE active = true';
     const params = [];
     if (owner) {
       sql += ' AND owner = ?';
@@ -40,7 +40,7 @@ router.put('/:id', async (req, res) => {
     const { name, amount, due_day, owner, category, active } = req.body;
     const { rows } = await query(
       `UPDATE bills SET name=?, amount=?, due_day=?, owner=?, category=?, active=? WHERE id=? RETURNING *`,
-      [name, amount, due_day, owner, category || null, active ?? 1, req.params.id]
+      [name, amount, due_day, owner, category || null, active !== undefined ? Boolean(active) : true, req.params.id]
     );
     if (rows.length === 0) return res.status(404).json({ error: 'Not found' });
     res.json(rows[0]);

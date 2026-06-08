@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { Pencil, Trash2, ChevronLeft, ChevronRight, Plus, AlertTriangle, CheckCircle2, XCircle } from 'lucide-react';
+import { Pencil, Trash2, ChevronLeft, ChevronRight, Plus, AlertTriangle, CheckCircle2, XCircle, Search, X } from 'lucide-react';
 import { getTransactions, createTransaction, createInstallments, updateTransaction, updateTransactionGroup, deleteTransaction, checkDuplicate, getCategories, getCards } from '../api';
 import { formatCurrency, formatDate, getMonthOptions, originLabel, originColor } from '../utils/formatters';
 import Modal from '../components/Modal';
@@ -13,15 +13,32 @@ const LABEL = { luan: 'Luan', barbara: 'Bárbara' };
 const today = () => new Date().toISOString().slice(0, 10);
 const emptyForm = { description: '', amount: '', date: today(), category_id: '', card_id: '', notes: '', paid_by: '' };
 
-const CategoryBar = ({ name, color, total, max }) => {
+const CategoryBar = ({ name, color, total, max, budget }) => {
   const pct = max > 0 ? Math.round((total / max) * 100) : 0;
+  const budgetPct = budget > 0 ? Math.round((total / budget) * 100) : null;
   return (
-    <div className="flex items-center gap-3">
-      <div className="w-28 text-sm text-zinc-600 truncate flex-shrink-0">{name}</div>
-      <div className="flex-1 bg-zinc-100 rounded-full h-2">
-        <div className="h-2 rounded-full transition-all" style={{ width: `${pct}%`, backgroundColor: color }} />
+    <div className="space-y-1">
+      <div className="flex items-center gap-3">
+        <div className="w-28 text-sm text-zinc-600 truncate flex-shrink-0">{name}</div>
+        <div className="flex-1 bg-zinc-100 rounded-full h-2">
+          <div className="h-2 rounded-full transition-all" style={{ width: `${pct}%`, backgroundColor: color }} />
+        </div>
+        <div className="w-24 text-sm text-zinc-700 font-medium text-right flex-shrink-0">{formatCurrency(total)}</div>
       </div>
-      <div className="w-24 text-sm text-zinc-700 font-medium text-right flex-shrink-0">{formatCurrency(total)}</div>
+      {budgetPct != null && (
+        <div className="ml-28 flex items-center gap-2">
+          <div className="flex-1 bg-zinc-100 rounded-full h-1.5">
+            <div className={`h-1.5 rounded-full transition-all ${
+              budgetPct >= 100 ? 'bg-red-400' : budgetPct >= 80 ? 'bg-amber-400' : 'bg-emerald-400'
+            }`} style={{ width: `${Math.min(100, budgetPct)}%` }} />
+          </div>
+          <span className={`text-xs w-20 text-right flex-shrink-0 font-medium ${
+            budgetPct >= 100 ? 'text-red-500' : budgetPct >= 80 ? 'text-amber-500' : 'text-zinc-400'
+          }`}>
+            {budgetPct}% de {formatCurrency(budget)}
+          </span>
+        </div>
+      )}
     </div>
   );
 };
@@ -316,11 +333,13 @@ export default function GastosOwner({ owner: ownerProp = 'luan' }) {
   const [editTarget, setEditTarget]     = useState(null);
   const [installPickTarget, setInstallPickTarget] = useState(null);
   const [editGroupTarget, setEditGroupTarget]     = useState(null);
+  const [searchQuery, setSearchQuery]   = useState('');
   const months   = getMonthOptions(12);
   const [monthIdx, setMonthIdx] = useState(0);
   const currentMonth = months[monthIdx].value;
 
   useEffect(() => { setActiveOwner(ownerProp); }, [ownerProp]);
+  useEffect(() => { setSearchQuery(''); }, [currentMonth, activeOwner]);
 
   const load = useCallback(() => {
     setLoading(true);
@@ -351,13 +370,25 @@ export default function GastosOwner({ owner: ownerProp = 'luan' }) {
     }
   };
 
+  const filteredTransactions = searchQuery.trim()
+    ? transactions.filter(t => {
+        const q = searchQuery.toLowerCase();
+        return t.description.toLowerCase().includes(q)
+          || (t.category_name || '').toLowerCase().includes(q)
+          || (t.card_name || '').toLowerCase().includes(q);
+      })
+    : transactions;
+
   const total         = transactions.reduce((s, t) => s + t.amount, 0);
   const paidForOtherTotal = transactions
     .filter(t => t.owner !== owner)
     .reduce((s, t) => s + t.amount, 0);
   const catMap  = transactions.reduce((acc, t) => {
     const key = t.category_id || 'outros';
-    if (!acc[key]) acc[key] = { name: t.category_name || 'Outros', color: t.category_color || '#6b7280', total: 0 };
+    if (!acc[key]) {
+      const catInfo = t.category_id ? categories.find(c => c.id === t.category_id) : null;
+      acc[key] = { name: t.category_name || 'Outros', color: t.category_color || '#6b7280', total: 0, budget: catInfo?.budget ?? null };
+    }
     acc[key].total += t.amount;
     return acc;
   }, {});
@@ -444,9 +475,26 @@ export default function GastosOwner({ owner: ownerProp = 'luan' }) {
         {/* Coluna direita: tabela + por categoria + por cartão */}
         <div className="xl:col-span-2 space-y-4">
           <div className="bg-white rounded-2xl shadow-sm overflow-hidden">
-            <div className="px-5 py-4 border-b border-zinc-100 flex items-center justify-between">
-              <h3 className="font-semibold text-zinc-900">Gastos de {months[monthIdx].label}</h3>
-              <span className="text-xs text-zinc-400">{transactions.length} registros</span>
+            <div className="px-5 py-4 border-b border-zinc-100 space-y-3">
+              <div className="flex items-center justify-between">
+                <h3 className="font-semibold text-zinc-900">Gastos de {months[monthIdx].label}</h3>
+                <span className="text-xs text-zinc-400">{filteredTransactions.length} registros</span>
+              </div>
+              <div className="relative">
+                <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-400 pointer-events-none" />
+                <input
+                  type="text"
+                  value={searchQuery}
+                  onChange={e => setSearchQuery(e.target.value)}
+                  placeholder="Buscar por descrição, categoria ou cartão…"
+                  className="w-full pl-8 pr-8 py-2 border border-zinc-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-400 bg-zinc-50"
+                />
+                {searchQuery && (
+                  <button onClick={() => setSearchQuery('')} className="absolute right-2.5 top-1/2 -translate-y-1/2 p-0.5 rounded hover:bg-zinc-200 transition-colors">
+                    <X size={13} className="text-zinc-400" />
+                  </button>
+                )}
+              </div>
             </div>
             {loading ? (
               <div className="flex items-center justify-center h-32"><div className="animate-spin rounded-full h-6 w-6 border-b-2 border-emerald-500" /></div>
@@ -466,7 +514,10 @@ export default function GastosOwner({ owner: ownerProp = 'luan' }) {
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-zinc-50">
-                    {transactions.map((t, i) => (
+                    {filteredTransactions.length === 0 && (
+                      <tr><td colSpan={6} className="px-4 py-8 text-center text-zinc-400 text-sm">Nenhum resultado para "{searchQuery}"</td></tr>
+                    )}
+                    {filteredTransactions.map((t, i) => (
                       <tr key={t.id} className={`transition-colors group ${i % 2 === 0 ? 'bg-white' : 'bg-zinc-50/70'} hover:bg-blue-50/40`}>
                         <td className="px-4 py-3 text-zinc-500 whitespace-nowrap text-xs">{formatDate(t.date)}</td>
                         <td className="px-4 py-3">
@@ -523,7 +574,7 @@ export default function GastosOwner({ owner: ownerProp = 'luan' }) {
                 <div className="bg-white rounded-2xl p-5 shadow-sm">
                   <h3 className="font-semibold text-zinc-900 mb-4">Por Categoria</h3>
                   <div className="space-y-3">
-                    {catList.map(c => <CategoryBar key={c.name} {...c} max={maxCat} />)}
+                    {catList.map(c => <CategoryBar key={c.name} {...c} max={maxCat} budget={c.budget} />)}
                   </div>
                 </div>
               )}

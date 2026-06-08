@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
+import { Link } from 'react-router-dom';
 import {
   Save, Trash2, AlertTriangle, CheckCircle2, X, CalendarX,
-  Plus, CreditCard, Receipt, Pencil, Tag,
+  Plus, CreditCard, Receipt, Pencil, Tag, MessageCircle,
   Utensils, Car, Home, HeartPulse, Gamepad2, BookOpen,
   Shirt, ShoppingCart, Fuel, Coffee, Gift, Music, Plane,
   Smartphone, Dumbbell, Dog, Baby, Hammer, Briefcase,
@@ -108,9 +109,10 @@ function ConfirmModal({ title, message, confirmLabel, onConfirm, onClose, loadin
 // ─── CategoryForm ─────────────────────────────────────────────────────────────
 function CategoryForm({ initial, onSave, onClose, saving }) {
   const [form, setForm] = useState({
-    name:  initial?.name  || '',
-    color: initial?.color || '#6b7280',
-    icon:  initial?.icon  || 'tag',
+    name:   initial?.name   || '',
+    color:  initial?.color  || '#6b7280',
+    icon:   initial?.icon   || 'tag',
+    budget: initial?.budget != null ? String(initial.budget) : '',
   });
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
 
@@ -172,6 +174,20 @@ function CategoryForm({ initial, onSave, onClose, saving }) {
             </button>
           ))}
         </div>
+      </div>
+
+      <div>
+        <label className="block text-sm font-medium text-zinc-700 mb-1">Meta mensal (R$) — opcional</label>
+        <input
+          type="number"
+          step="0.01"
+          min="0"
+          value={form.budget}
+          onChange={e => set('budget', e.target.value)}
+          placeholder="Ex: 500,00"
+          className="w-full px-3 py-2 border border-zinc-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-violet-500"
+        />
+        <p className="text-xs text-zinc-400 mt-1">Se definida, exibe barra de progresso nos gastos desta categoria.</p>
       </div>
 
       <div className="flex gap-3 pt-1">
@@ -468,7 +484,7 @@ export default function Configuracoes() {
     if (!editBill.name || !editBill.amount || !editBill.due_day) return;
     setSavingEditBill(true);
     try {
-      const res = await updateBill(editBill.id, { name: editBill.name, amount: parseFloat(editBill.amount), due_day: parseInt(editBill.due_day), owner: editBill.owner, active: 1 });
+      const res = await updateBill(editBill.id, { name: editBill.name, amount: parseFloat(editBill.amount), due_day: parseInt(editBill.due_day), owner: editBill.owner, active: true });
       setBills(prev => prev.map(b => b.id === editBill.id ? res.data : b).sort((a, b) => a.due_day - b.due_day));
       setEditBill(null);
       flash('Conta atualizada.');
@@ -560,7 +576,12 @@ export default function Configuracoes() {
                 </div>
                 <div className="flex-1 min-w-0">
                   <p className="text-sm font-medium text-zinc-800">{cat.name}</p>
-                  <p className="text-xs text-zinc-400 font-mono">{cat.color}</p>
+                  <div className="flex items-center gap-2 mt-0.5">
+                    <p className="text-xs text-zinc-400 font-mono">{cat.color}</p>
+                    {cat.budget != null && (
+                      <p className="text-xs text-violet-500 font-medium">Meta: {formatCurrency(cat.budget)}</p>
+                    )}
+                  </div>
                 </div>
                 <button
                   onClick={() => setCatModal({ mode: 'edit', cat })}
@@ -755,6 +776,24 @@ export default function Configuracoes() {
             </div>
           </div>
         )}
+      </div>
+
+      {/* ── WhatsApp ── */}
+      <div className="bg-white rounded-2xl p-6 shadow-sm space-y-3">
+        <div className="flex items-center gap-2">
+          <MessageCircle size={18} className="text-green-500" />
+          <h2 className="font-semibold text-zinc-900">WhatsApp</h2>
+        </div>
+        <p className="text-xs text-zinc-500">
+          Integração via webhook para envio de resumos e alertas financeiros.
+        </p>
+        <Link
+          to="/whatsapp"
+          className="inline-flex items-center gap-2 text-sm font-medium text-green-600 hover:text-green-700 bg-green-50 hover:bg-green-100 px-4 py-2.5 rounded-lg transition-colors"
+        >
+          <MessageCircle size={15} />
+          Gerenciar integração WhatsApp →
+        </Link>
       </div>
 
       {/* ── Zona de perigo ── */}

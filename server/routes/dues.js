@@ -14,7 +14,7 @@ router.get('/', async (req, res) => {
       { rows: checks },
       { rows: debtsWithDue },
     ] = await Promise.all([
-      query(`SELECT * FROM bills WHERE active = 1 ORDER BY due_day`),
+      query(`SELECT * FROM bills WHERE active = true ORDER BY due_day`),
       query(`SELECT * FROM cards WHERE due_day IS NOT NULL ORDER BY due_day`),
       query(
         `SELECT card_id, COALESCE(SUM(amount), 0) as total

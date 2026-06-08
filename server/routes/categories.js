@@ -13,11 +13,11 @@ router.get('/', async (req, res) => {
 
 router.post('/', async (req, res) => {
   try {
-    const { name, color, icon } = req.body;
+    const { name, color, icon, budget } = req.body;
     if (!name) return res.status(400).json({ error: 'Nome é obrigatório' });
     const { rows } = await query(
-      `INSERT INTO categories (name, color, icon) VALUES (?, ?, ?) RETURNING *`,
-      [name, color || '#6b7280', icon || 'tag']
+      `INSERT INTO categories (name, color, icon, budget) VALUES (?, ?, ?, ?) RETURNING *`,
+      [name, color || '#6b7280', icon || 'tag', budget != null && budget !== '' ? parseFloat(budget) : null]
     );
     res.status(201).json(rows[0]);
   } catch (err) {
@@ -27,10 +27,10 @@ router.post('/', async (req, res) => {
 
 router.put('/:id', async (req, res) => {
   try {
-    const { name, color, icon } = req.body;
+    const { name, color, icon, budget } = req.body;
     const { rows } = await query(
-      `UPDATE categories SET name=?, color=?, icon=? WHERE id=? RETURNING *`,
-      [name, color, icon, req.params.id]
+      `UPDATE categories SET name=?, color=?, icon=?, budget=? WHERE id=? RETURNING *`,
+      [name, color, icon, budget != null && budget !== '' ? parseFloat(budget) : null, req.params.id]
     );
     res.json(rows[0]);
   } catch (err) {
