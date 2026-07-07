@@ -2,7 +2,7 @@ import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
   TrendingUp, TrendingDown, Landmark, Wallet,
   ArrowUpRight, ArrowDownRight, ChevronLeft, ChevronRight,
-  ArrowUp, ArrowDown, AlertTriangle, CheckCircle2, Lightbulb, Target, CreditCard,
+  ArrowUp, ArrowDown, AlertTriangle, CheckCircle2, Lightbulb, CreditCard,
   Eye, EyeOff, X, Calendar, Banknote, Smartphone, Clock,
 } from 'lucide-react';
 import { Link } from 'react-router-dom';
@@ -90,120 +90,6 @@ function daysUntilDue(due_day) {
   return Math.ceil((nextDue - today) / 86400000);
 }
 
-// ─── buildInsights ────────────────────────────────────────────────────────────
-function buildInsights(data) {
-  const insights = [];
-  const {
-    income, expense, surplus,
-    prevMonthIncome, prevMonthExpense,
-    categoryBreakdown, prevCategoryBreakdown,
-    debtTotal, monthlyDebt,
-    upcomingGoals = [],
-    monthlyEvolution = [],
-  } = data;
-
-  // 3-month average: monthlyEvolution indices 2,3,4 = 3,2,1 months ago
-  const recentMonths = monthlyEvolution.slice(2, 5).filter(m => m.expense > 0);
-  const avg3Expense = recentMonths.length > 0
-    ? recentMonths.reduce((s, m) => s + m.expense, 0) / recentMonths.length
-    : prevMonthExpense;
-  const avgLabel = recentMonths.length >= 2 ? 'da média dos últimos 3 meses' : 'do mês passado';
-
-  if (income > 0 && expense === 0) {
-    insights.push({ type: 'tip', icon: Lightbulb, title: 'Nenhum gasto registrado ainda',
-      body: 'Registre suas despesas para ter uma visão completa do seu mês.',
-      action: 'Comece adicionando um lançamento pelo botão "+ Lançamento" no topo.' });
-    return insights;
-  }
-
-  if (avg3Expense > 0) {
-    const pctDiff = (expense - avg3Expense) / avg3Expense;
-    if (pctDiff > 0.20) {
-      let biggestCat = null, biggestDiff = 0;
-      if (prevCategoryBreakdown?.length > 0 && categoryBreakdown.length > 0) {
-        const prevMap = Object.fromEntries(prevCategoryBreakdown.map(c => [c.id, c.total]));
-        for (const cat of categoryBreakdown) {
-          const diff = cat.total - (prevMap[cat.id] || 0);
-          if (diff > biggestDiff) { biggestDiff = diff; biggestCat = cat; }
-        }
-      }
-      const pct = Math.round(pctDiff * 100);
-      insights.push({ type: 'warning', icon: TrendingUp,
-        title: `Gastos ${pct}% acima ${avgLabel}`,
-        body: biggestCat
-          ? `A categoria "${biggestCat.name}" foi a que mais cresceu (+${formatCurrency(biggestDiff)}).`
-          : `Você gastou ${formatCurrency(expense - avg3Expense)} a mais que ${avgLabel}.`,
-        action: `Revise os gastos em "${biggestCat?.name ?? 'suas principais categorias'}" para retomar o controle.` });
-    } else if (pctDiff < -0.10) {
-      const pct = Math.round(Math.abs(pctDiff) * 100);
-      insights.push({ type: 'positive', icon: TrendingDown,
-        title: `Gastos ${pct}% menores que ${avgLabel}`,
-        body: `Você economizou ${formatCurrency(Math.abs(expense - avg3Expense))} em relação ${avgLabel}.`,
-        action: 'Continue assim! Considere destinar a diferença para suas metas.' });
-    }
-  }
-
-  if (income > 0 && categoryBreakdown.length > 0) {
-    const foodKeywords = ['alimenta', 'ifood', 'comida', 'restaurante', 'mercado', 'supermercado', 'refei'];
-    const foodCats = categoryBreakdown.filter(c => foodKeywords.some(kw => c.name.toLowerCase().includes(kw)));
-    const foodTotal = foodCats.reduce((s, c) => s + c.total, 0);
-    if (foodTotal > 0 && foodTotal / income > 0.15) {
-      const pct = Math.round((foodTotal / income) * 100);
-      insights.push({ type: 'warning', icon: AlertTriangle,
-        title: `Alimentação representa ${pct}% da renda`,
-        body: `Você gastou ${formatCurrency(foodTotal)} em alimentação — acima do recomendado (15%).`,
-        action: 'Tente cozinhar mais em casa e reduzir pedidos por aplicativo 2–3 vezes por semana.' });
-    }
-  }
-
-  if (income > 0) {
-    const surplusPct = surplus / income;
-    if (surplusPct < 0.20 && surplusPct >= 0) {
-      const committedPct = Math.round(((income - surplus) / income) * 100);
-      insights.push({ type: 'warning', icon: AlertTriangle,
-        title: 'Sobra abaixo de 20% da renda',
-        body: `${committedPct}% da sua renda está comprometida com gastos, dívidas e assinaturas.`,
-        action: 'Identifique assinaturas ou gastos fixos que somam mais de 10% da renda e corte os desnecessários.' });
-    } else if (surplusPct >= 0.30) {
-      insights.push({ type: 'positive', icon: CheckCircle2,
-        title: 'Sobra saudável este mês',
-        body: `Você tem ${formatCurrency(surplus)} disponível (${Math.round(surplusPct * 100)}% da renda).`,
-        action: 'Aproveite para acelerar o pagamento de dívidas ou depositar nas suas metas.' });
-    }
-  }
-
-  if (debtTotal > 0 && income > 0) {
-    const debtPct = Math.round((monthlyDebt / income) * 100);
-    if (debtPct >= 20) {
-      insights.push({ type: 'warning', icon: Landmark,
-        title: `${debtPct}% da renda vai para dívidas`,
-        body: `Você paga ${formatCurrency(monthlyDebt)}/mês em parcelas de dívidas (total: ${formatCurrency(debtTotal)}).`,
-        action: 'Priorize quitar a dívida com maior taxa de juros para reduzir o custo total mais rápido.' });
-    }
-  }
-
-  if (upcomingGoals.length > 0) {
-    const today = new Date(); today.setHours(0, 0, 0, 0);
-    for (const goal of upcomingGoals) {
-      const dl = new Date(goal.deadline + 'T00:00:00');
-      const daysLeft = Math.ceil((dl - today) / 86400000);
-      const pct = goal.target_amount > 0 ? goal.current_amount / goal.target_amount : 0;
-      if (daysLeft > 0 && daysLeft <= 60 && pct < 0.5) {
-        const monthsLeft = Math.max(1, Math.round(daysLeft / 30));
-        const remaining = goal.target_amount - goal.current_amount;
-        const monthlyNeeded = Math.ceil(remaining / monthsLeft);
-        insights.push({ type: 'tip', icon: Target,
-          title: `Meta "${goal.title}" precisa de atenção`,
-          body: `Faltam ${daysLeft} dias e você está em ${Math.round(pct * 100)}% da meta.`,
-          action: `Deposite ${formatCurrency(monthlyNeeded)}/mês para atingir o objetivo a tempo.` });
-        break;
-      }
-    }
-  }
-
-  return insights;
-}
-
 function healthPhrase(pct) {
   if (pct < 40) return 'Suas finanças estão excelentes! Continue mantendo esse controle.';
   if (pct < 60) return 'Boa situação financeira. Você tem uma margem confortável.';
@@ -224,7 +110,6 @@ export default function Overview() {
 
   const [dues, setDues]     = useState([]);
   const [showPaid, setShowPaid] = useState(false);
-  const [showAllInstallments, setShowAllInstallments] = useState(false);
 
   const load = useCallback(() => {
     if (retryTimer.current) { clearInterval(retryTimer.current); retryTimer.current = null; }
@@ -294,7 +179,6 @@ export default function Overview() {
   );
 
   const maxCategory = data.categoryBreakdown.length > 0 ? Math.max(...data.categoryBreakdown.map(c => c.total)) : 1;
-  const insights    = buildInsights(data);
 
   const unpaidDues = dues.filter(d => !d.checked);
   const paidDues   = dues.filter(d =>  d.checked);
@@ -405,9 +289,10 @@ export default function Overview() {
       </div>
 
       {/* Projeção do Mês */}
-      {monthIdx === 0 && data.expense > 0 && (() => {
+      {monthIdx === 0 && (() => {
         const now = new Date();
         const daysPassed = now.getDate();
+        if (daysPassed < 5 || (data.expenseCount ?? 0) < 3) return null;
         const daysInMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate();
         const dailyAvg = data.expense / daysPassed;
         const projected = Math.round(dailyAvg * daysInMonth);
@@ -441,61 +326,50 @@ export default function Overview() {
 
       {/* Saúde Financeira */}
       <div className="bg-white rounded-2xl p-5 shadow-sm hover:shadow-md transition-shadow">
-        <div className="flex items-center justify-between mb-3">
-          <div>
-            <h3 className="font-semibold text-zinc-900">Saúde Financeira</h3>
-            <p className="text-xs text-zinc-500 mt-0.5">{data.healthPercent}% da renda comprometida</p>
-          </div>
-          <span className={`text-sm font-bold px-3 py-1 rounded-full ${
-            data.healthPercent < 60 ? 'bg-emerald-100 text-emerald-700' :
-            data.healthPercent < 80 ? 'bg-amber-100 text-amber-700' :
-                                      'bg-red-100 text-red-700'
-          }`}>
-            {data.healthPercent < 60 ? 'Saudável' : data.healthPercent < 80 ? 'Atenção' : 'Crítico'}
-          </span>
-        </div>
-        <div className="w-full bg-zinc-100 rounded-full h-3">
-          <div className={`h-3 rounded-full transition-all duration-700 ${
-            data.healthPercent < 60 ? 'bg-emerald-500' : data.healthPercent < 80 ? 'bg-amber-500' : 'bg-red-500'
-          }`} style={{ width: `${Math.min(100, data.healthPercent)}%` }} />
-        </div>
-        <div className="flex justify-between text-xs text-zinc-400 mt-1.5">
-          <span>0%</span><span>50%</span><span>100%</span>
-        </div>
-        <p className={`text-sm font-medium mt-3 ${
-          data.healthPercent < 60 ? 'text-emerald-600' : data.healthPercent < 80 ? 'text-amber-600' : 'text-red-600'
-        }`}>{healthPhrase(data.healthPercent)}</p>
+        <h3 className="font-semibold text-zinc-900 mb-3">Saúde Financeira</h3>
+        {data.income === 0 ? (
+          <p className="text-sm text-zinc-400">Registre suas entradas do mês para ver a saúde financeira.</p>
+        ) : (
+          <>
+            <div className="flex items-center justify-between mb-3">
+              <p className="text-xs text-zinc-500">{data.healthPercent}% da renda comprometida</p>
+              <span className={`text-sm font-bold px-3 py-1 rounded-full ${
+                data.healthPercent < 60 ? 'bg-emerald-100 text-emerald-700' :
+                data.healthPercent < 80 ? 'bg-amber-100 text-amber-700' :
+                                          'bg-red-100 text-red-700'
+              }`}>
+                {data.healthPercent < 60 ? 'Saudável' : data.healthPercent < 80 ? 'Atenção' : 'Crítico'}
+              </span>
+            </div>
+            <div className="w-full bg-zinc-100 rounded-full h-3">
+              <div className={`h-3 rounded-full transition-all duration-700 ${
+                data.healthPercent < 60 ? 'bg-emerald-500' : data.healthPercent < 80 ? 'bg-amber-500' : 'bg-red-500'
+              }`} style={{ width: `${Math.min(100, data.healthPercent)}%` }} />
+            </div>
+            <div className="flex justify-between text-xs text-zinc-400 mt-1.5">
+              <span>0%</span><span>50%</span><span>100%</span>
+            </div>
+            <p className={`text-sm font-medium mt-3 ${
+              data.healthPercent < 60 ? 'text-emerald-600' : data.healthPercent < 80 ? 'text-amber-600' : 'text-red-600'
+            }`}>{healthPhrase(data.healthPercent)}</p>
+          </>
+        )}
       </div>
 
-      {/* Insights do Mês */}
-      {insights.length > 0 && (
+      {/* Maiores categorias */}
+      {data.categoryBreakdown.length > 0 && (
         <div className="bg-white rounded-2xl p-5 shadow-sm hover:shadow-md transition-shadow">
-          <div className="flex items-center gap-2 mb-4">
+          <div className="flex items-center gap-2 mb-3">
             <Lightbulb size={18} className="text-amber-400" />
-            <h3 className="font-semibold text-zinc-900">Insights do Mês</h3>
+            <h3 className="font-semibold text-zinc-900">Maiores Gastos do Mês</h3>
           </div>
-          <div className="space-y-3">
-            {insights.map((ins, i) => {
-              const Icon = ins.icon;
-              const styles = {
-                warning:  { wrap: 'bg-red-50 border-red-200',         icon: 'text-red-500',     title: 'text-red-800',     action: 'text-red-600' },
-                tip:      { wrap: 'bg-amber-50 border-amber-200',     icon: 'text-amber-500',   title: 'text-amber-800',   action: 'text-amber-700' },
-                positive: { wrap: 'bg-emerald-50 border-emerald-200', icon: 'text-emerald-500', title: 'text-emerald-800', action: 'text-emerald-700' },
-              };
-              const s = styles[ins.type] || styles.tip;
-              return (
-                <div key={i} className={`border rounded-xl px-4 py-3.5 ${s.wrap}`}>
-                  <div className="flex items-start gap-3">
-                    <Icon size={16} className={`${s.icon} flex-shrink-0 mt-0.5`} />
-                    <div className="space-y-1">
-                      <p className={`text-sm font-semibold ${s.title}`}>{ins.title}</p>
-                      <p className="text-sm text-zinc-600">{ins.body}</p>
-                      <p className={`text-xs font-semibold ${s.action}`}>→ {ins.action}</p>
-                    </div>
-                  </div>
-                </div>
-              );
-            })}
+          <div className="space-y-1.5">
+            {data.categoryBreakdown.slice(0, 5).map((cat, i) => (
+              <p key={cat.id} className="text-sm text-zinc-600">
+                <span className="font-semibold text-zinc-800">{i + 1}. {cat.name}:</span>{' '}
+                {formatCurrency(cat.total)}
+              </p>
+            ))}
           </div>
         </div>
       )}
@@ -746,6 +620,7 @@ export default function Overview() {
                 { key: 'barbara', label: 'Bárbara', accent: '#ec4899', border: 'border-pink-500', text: 'text-pink-600',  bg: 'bg-pink-50'  },
               ].map(({ key, label, accent, border, text, bg }) => {
                 const s = data.ownerSummary[key] || { income: 0, expense: 0, balance: 0, prevBalance: 0, debtTotal: 0 };
+                if (key === 'barbara' && s.income === 0 && s.expense === 0) return null;
                 const balanceDiff = s.balance - (s.prevBalance ?? s.balance);
                 const incomeShare = data.income > 0 ? Math.round((s.income / data.income) * 100) : 0;
                 const otherName = key === 'luan' ? 'Bárbara' : 'Luan';
@@ -814,101 +689,14 @@ export default function Overview() {
 
         {/* Compromissos Futuros */}
         {data.installmentSummary && data.installmentSummary.length > 0 && (
-          <div className="bg-white rounded-2xl p-5 shadow-sm hover:shadow-md transition-shadow">
-            <div className="flex items-center justify-between mb-4">
-              <div className="flex items-center gap-2">
-                <CreditCard size={18} className="text-violet-500" />
-                <h3 className="font-semibold text-zinc-900">Compromissos Futuros</h3>
-              </div>
-              <span className="text-xs text-zinc-500 bg-zinc-100 px-2.5 py-1 rounded-full">
-                {data.installmentSummary.length} compra{data.installmentSummary.length !== 1 ? 's' : ''} ativa{data.installmentSummary.length !== 1 ? 's' : ''}
+          <div className="bg-white rounded-2xl p-4 shadow-sm flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <CreditCard size={16} className="text-violet-500" />
+              <span className="text-sm font-medium text-zinc-700">
+                {data.installmentSummary.length} parcelas ativas · {formatCurrency(data.totalMonthlyInstallments)}/mês
               </span>
             </div>
-            <div className="space-y-3">
-              {(showAllInstallments ? data.installmentSummary : data.installmentSummary.slice(0, 4)).map((item, i) => {
-                const pct = item.total > 0 ? Math.round((item.current / item.total) * 100) : 0;
-                return (
-                  <div key={i} className="border border-zinc-100 rounded-xl p-4">
-                    <div className="flex items-start justify-between gap-3 mb-2">
-                      <div className="min-w-0">
-                        <p className="text-sm font-semibold text-zinc-800 truncate">{item.title}</p>
-                        <div className="flex items-center gap-2 mt-0.5 flex-wrap">
-                          <span className="text-xs font-medium text-violet-600 bg-violet-50 px-2 py-0.5 rounded-full">
-                            {item.current}/{item.total} parcelas
-                          </span>
-                          {item.card_name && (
-                            <span className="text-xs font-medium px-2 py-0.5 rounded-full text-white"
-                              style={{ backgroundColor: item.card_color || '#6b7280' }}>
-                              {item.card_name}
-                            </span>
-                          )}
-                        </div>
-                      </div>
-                      <div className="text-right flex-shrink-0">
-                        <p className="text-sm font-bold text-zinc-800">{formatCurrency(item.monthlyAmount)}<span className="text-xs font-normal text-zinc-400">/mês</span></p>
-                        <p className="text-xs text-zinc-400 mt-0.5">Resta {formatCurrency(item.totalRemaining)}</p>
-                      </div>
-                    </div>
-                    <div className="w-full bg-zinc-100 rounded-full h-1.5">
-                      <div className="h-1.5 rounded-full bg-violet-400 transition-all duration-500" style={{ width: `${pct}%` }} />
-                    </div>
-                    <p className="text-xs text-zinc-400 mt-1">{item.remainingCount} parcela{item.remainingCount !== 1 ? 's' : ''} restante{item.remainingCount !== 1 ? 's' : ''}</p>
-                  </div>
-                );
-              })}
-            </div>
-            {data.installmentSummary.length > 4 && (
-              <button onClick={() => setShowAllInstallments(s => !s)}
-                className="w-full text-xs text-violet-600 hover:text-violet-700 font-medium py-1.5 transition-colors">
-                {showAllInstallments ? '▲ Mostrar menos' : `▼ Ver todos (${data.installmentSummary.length})`}
-              </button>
-            )}
-            <div className="mt-4 pt-4 border-t border-zinc-100 flex items-center justify-between">
-              <p className="text-sm text-zinc-500">Total mensal em parcelas</p>
-              <p className="text-sm font-bold text-violet-600">{formatCurrency(data.totalMonthlyInstallments)}</p>
-            </div>
-          </div>
-        )}
-
-        {/* Metas */}
-        {data.upcomingGoals && data.upcomingGoals.length > 0 && (
-          <div>
-            <div className="flex items-center justify-between mb-3">
-              <h3 className="text-base font-bold text-zinc-900">Metas</h3>
-              <Link to="/metas" className="text-sm text-emerald-600 hover:text-emerald-700 font-medium transition-colors">Ver todas →</Link>
-            </div>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              {data.upcomingGoals.map(goal => {
-                const pct = goal.target_amount > 0 ? Math.min(100, Math.round((goal.current_amount / goal.target_amount) * 100)) : 0;
-                const today = new Date(); today.setHours(0, 0, 0, 0);
-                const dl  = new Date(goal.deadline + 'T00:00:00');
-                const days = Math.ceil((dl - today) / 86400000);
-                const daysLabel = days < 0 ? `${Math.abs(days)}d em atraso` : days === 0 ? 'Vence hoje' : `${days} dias`;
-                const daysColor = days <= 0 ? 'text-red-500' : days <= 30 ? 'text-amber-500' : 'text-zinc-400';
-                return (
-                  <div key={goal.id} className="bg-white rounded-2xl p-4 shadow-sm">
-                    <div className="flex items-center gap-2 mb-3">
-                      <div className="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 text-white"
-                        style={{ backgroundColor: goal.color }}>
-                        <Target size={14} />
-                      </div>
-                      <div className="min-w-0">
-                        <p className="text-sm font-semibold text-zinc-800 truncate">{goal.title}</p>
-                        <p className={`text-xs ${daysColor}`}>{daysLabel}</p>
-                      </div>
-                    </div>
-                    <div className="w-full bg-zinc-100 rounded-full h-2 mb-1.5">
-                      <div className="h-2 rounded-full transition-all duration-700" style={{ width: `${pct}%`, backgroundColor: goal.color }} />
-                    </div>
-                    <div className="flex justify-between text-xs text-zinc-500">
-                      <span>{formatCurrency(goal.current_amount)}</span>
-                      <span className="font-medium" style={{ color: goal.color }}>{pct}%</span>
-                      <span>{formatCurrency(goal.target_amount)}</span>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
+            <Link to="/gastos/luan" className="text-xs text-violet-600 hover:text-violet-700 font-medium">Ver detalhes →</Link>
           </div>
         )}
 

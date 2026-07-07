@@ -326,6 +326,7 @@ export default function GastosOwner({ owner: ownerProp = 'luan' }) {
   const owner = activeOwner;
   const theme  = THEME[owner];
   const label  = LABEL[owner];
+  const [toast, setToast] = useState(false);
   const [transactions, setTransactions] = useState([]);
   const [categories, setCategories]     = useState([]);
   const [cards, setCards]               = useState([]);
@@ -468,7 +469,7 @@ export default function GastosOwner({ owner: ownerProp = 'luan' }) {
           <div className="bg-white rounded-2xl p-5 shadow-sm xl:sticky xl:top-[69px]">
             <h3 className="font-semibold text-zinc-900 mb-4">Novo Gasto</h3>
             <GastoForm categories={categories} cards={cards} owner={owner} theme={theme}
-              onSaved={() => { load(); window.dispatchEvent(new CustomEvent('transaction-saved')); }} />
+              onSaved={() => { load(); window.dispatchEvent(new CustomEvent('transaction-saved')); setToast(true); setTimeout(() => setToast(false), 2000); }} />
           </div>
         </div>
 
@@ -659,6 +660,12 @@ export default function GastosOwner({ owner: ownerProp = 'luan' }) {
             onCancel={() => setEditGroupTarget(null)}
           />
         </Modal>
+      )}
+
+      {toast && (
+        <div className="fixed top-4 right-4 z-50 bg-emerald-500 text-white px-4 py-2.5 rounded-xl shadow-lg text-sm font-semibold flex items-center gap-2">
+          ✓ Gasto adicionado!
+        </div>
       )}
     </div>
   );

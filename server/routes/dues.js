@@ -6,6 +6,10 @@ const { query } = require('../db/database-pg');
 router.get('/', async (req, res) => {
   try {
     const month = req.query.month || new Date().toISOString().slice(0, 7);
+    const [year, mon] = month.split('-');
+    const lastDay   = new Date(parseInt(year), parseInt(mon), 0).getDate();
+    const startDate = `${year}-${mon}-01`;
+    const endDate   = `${year}-${mon}-${String(lastDay).padStart(2, '0')}`;
 
     const [
       { rows: bills },
@@ -13,21 +17,29 @@ router.get('/', async (req, res) => {
       { rows: cardSpend },
       { rows: checks },
       { rows: debtsWithDue },
+      { rows: subscriptions },
     ] = await Promise.all([
       query(`SELECT * FROM bills WHERE active = true ORDER BY due_day`),
       query(`SELECT * FROM cards WHERE due_day IS NOT NULL ORDER BY due_day`),
       query(
         `SELECT card_id, COALESCE(SUM(amount), 0) as total
          FROM transactions
-         WHERE type = 'expense' AND date LIKE ?
+         WHERE type = 'expense' AND date >= ? AND date <= ?
          GROUP BY card_id`,
-        [month + '%']
+        [startDate, endDate]
       ),
       query(`SELECT type, ref_id FROM due_checks WHERE month = ?`, [month]),
       query(`SELECT * FROM debts WHERE total_amount > paid_amount AND due_day IS NOT NULL ORDER BY due_day`),
+      query(`
+        SELECT s.*, c.name as card_name
+        FROM subscriptions s
+        LEFT JOIN cards c ON s.card_id = c.id
+        WHERE s.active = true
+        ORDER BY s.billing_day
+      `),
     ]);
 
-    const spendMap = Object.fromEntries(cardSpend.map(r => [r.card_id, r.total]));
+    const spendMap   = Object.fromEntries(cardSpend.map(r => [r.card_id, r.total]));
     const checkedSet = new Set(checks.map(c => `${c.type}-${c.ref_id}`));
 
     const items = [
@@ -61,6 +73,16 @@ router.get('/', async (req, res) => {
         due_day: d.due_day,
         owner:   d.owner,
         checked: checkedSet.has(`debt-${d.id}`),
+      })),
+      ...subscriptions.map(s => ({
+        type:      'subscription',
+        id:        s.id,
+        name:      s.name,
+        amount:    s.amount,
+        due_day:   s.billing_day,
+        owner:     s.owner,
+        card_name: s.card_name || null,
+        checked:   checkedSet.has(`subscription-${s.id}`),
       })),
     ].sort((a, b) => a.due_day - b.due_day);
 

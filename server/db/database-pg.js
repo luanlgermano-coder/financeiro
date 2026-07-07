@@ -235,6 +235,11 @@ async function initialize() {
     // Add budget column to categories
     await client.query(`ALTER TABLE categories ADD COLUMN IF NOT EXISTS budget FLOAT8`);
 
+    // Clean up old due_checks (older than 3 months)
+    await client.query(
+      `DELETE FROM due_checks WHERE month < TO_CHAR(NOW() - INTERVAL '3 months', 'YYYY-MM')`
+    );
+
     // One-time migration: recalculate billing dates based on best_purchase_day
     const { rows: [migDone] } = await client.query(
       `SELECT 1 FROM settings WHERE key = 'migration_billing_dates_v1' LIMIT 1`

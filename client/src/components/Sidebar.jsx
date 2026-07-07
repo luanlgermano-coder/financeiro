@@ -3,7 +3,7 @@ import { NavLink } from 'react-router-dom';
 import {
   LayoutDashboard, CreditCard, Repeat2, Landmark,
   TrendingUp, ChevronDown, ChevronRight,
-  User, ArrowDownCircle, Settings, LogOut, X, Target
+  User, ArrowDownCircle, Settings, LogOut, X,
 } from 'lucide-react';
 
 // Contexto para fechar o menu ao navegar no mobile
@@ -68,7 +68,6 @@ export default function Sidebar({ isOpen, onClose, onLogout }) {
             </div>
             <span className="text-white font-bold text-lg tracking-tight">Financeiro</span>
           </div>
-          {/* Botão fechar — só aparece no mobile */}
           <button
             onClick={onClose}
             className="md:hidden p-1.5 rounded-lg text-zinc-500 hover:text-white hover:bg-zinc-800 transition-colors"
@@ -93,8 +92,7 @@ export default function Sidebar({ isOpen, onClose, onLogout }) {
           </Section>
 
           <Section label="Entradas">
-            <NavItem to="/entradas/luan"    icon={ArrowDownCircle} label="Entradas — Luan"    accent="#3b82f6" />
-            <NavItem to="/entradas/barbara" icon={ArrowDownCircle} label="Entradas — Bárbara" accent="#ec4899" />
+            <NavItem to="/entradas/luan" icon={ArrowDownCircle} label="Entradas — Luan" accent="#3b82f6" />
           </Section>
 
           <Section label="Gastos">
@@ -108,7 +106,6 @@ export default function Sidebar({ isOpen, onClose, onLogout }) {
           </Section>
 
           <Section label="Outros" defaultOpen={false}>
-            <NavItem to="/metas"         icon={Target}   label="Metas"         iconColor="text-emerald-400" />
             <NavItem to="/assinaturas"   icon={Repeat2}  label="Assinaturas"   iconColor="text-violet-400" />
             <NavItem to="/configuracoes" icon={Settings} label="Configurações" iconColor="text-zinc-400" />
           </Section>
@@ -125,7 +122,7 @@ export default function Sidebar({ isOpen, onClose, onLogout }) {
               <span>Sair</span>
             </button>
           )}
-          <p className="text-xs text-zinc-600 text-center py-1">v1.0.0 · 2025</p>
+          <p className="text-xs text-zinc-600 text-center py-1">v1.0.0 · 2026</p>
         </div>
       </aside>
     </CloseCtx.Provider>

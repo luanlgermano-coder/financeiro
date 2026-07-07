@@ -1,8 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import { Link } from 'react-router-dom';
 import {
   Save, Trash2, AlertTriangle, CheckCircle2, X, CalendarX,
-  Plus, CreditCard, Receipt, Pencil, Tag, MessageCircle,
+  Plus, CreditCard, Receipt, Pencil, Tag,
   Utensils, Car, Home, HeartPulse, Gamepad2, BookOpen,
   Shirt, ShoppingCart, Fuel, Coffee, Gift, Music, Plane,
   Smartphone, Dumbbell, Dog, Baby, Hammer, Briefcase,
@@ -776,24 +775,6 @@ export default function Configuracoes() {
             </div>
           </div>
         )}
-      </div>
-
-      {/* ── WhatsApp ── */}
-      <div className="bg-white rounded-2xl p-6 shadow-sm space-y-3">
-        <div className="flex items-center gap-2">
-          <MessageCircle size={18} className="text-green-500" />
-          <h2 className="font-semibold text-zinc-900">WhatsApp</h2>
-        </div>
-        <p className="text-xs text-zinc-500">
-          Integração via webhook para envio de resumos e alertas financeiros.
-        </p>
-        <Link
-          to="/whatsapp"
-          className="inline-flex items-center gap-2 text-sm font-medium text-green-600 hover:text-green-700 bg-green-50 hover:bg-green-100 px-4 py-2.5 rounded-lg transition-colors"
-        >
-          <MessageCircle size={15} />
-          Gerenciar integração WhatsApp →
-        </Link>
       </div>
 
       {/* ── Zona de perigo ── */}

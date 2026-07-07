@@ -7,7 +7,7 @@ export const clearToken = ()       => localStorage.removeItem(TOKEN_KEY);
 
 const api = axios.create({
   baseURL: `${import.meta.env.VITE_API_URL ?? ''}/api`,
-  timeout: 30000,
+  timeout: 65000,
 });
 
 // Injeta o token em todas as requisições
@@ -73,22 +73,11 @@ export const deleteDebt = (id) => api.delete(`/debts/${id}`);
 export const registerDebtPayment = (id, amount) => api.post(`/debts/${id}/payment`, { amount });
 export const getDebtPayments = (id) => api.get(`/debts/${id}/payments`);
 
-// WhatsApp
-export const getWhatsAppLogs = () => api.get('/webhook/whatsapp/logs');
-export const getWhatsAppStats = () => api.get('/webhook/whatsapp/stats');
-
 // Settings
 export const getSettings = () => api.get('/settings');
 export const updateSettings = (data) => api.put('/settings', data);
 export const resetData = () => api.delete('/transactions/all');
 export const resetMonth = () => api.delete('/transactions/month');
-
-// Goals
-export const getGoals = () => api.get('/goals');
-export const createGoal = (data) => api.post('/goals', data);
-export const updateGoal = (id, data) => api.put(`/goals/${id}`, data);
-export const deleteGoal = (id) => api.delete(`/goals/${id}`);
-export const depositGoal = (id, amount) => api.post(`/goals/${id}/deposit`, { amount });
 
 // Bills
 export const getBills = (owner) => api.get('/bills', owner ? { params: { owner } } : {});

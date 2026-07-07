@@ -210,10 +210,13 @@ router.put('/:id', async (req, res) => {
 // DELETE /api/transactions/month
 router.delete('/month', async (req, res) => {
   try {
-    const month = new Date().toISOString().slice(0, 7);
+    const now = new Date();
+    const year = now.getFullYear();
+    const mon  = String(now.getMonth() + 1).padStart(2, '0');
+    const lastDay = new Date(year, now.getMonth() + 1, 0).getDate();
     const { rowCount } = await query(
       `DELETE FROM transactions WHERE date BETWEEN ? AND ?`,
-      [`${month}-01`, `${month}-31`]
+      [`${year}-${mon}-01`, `${year}-${mon}-${String(lastDay).padStart(2, '0')}`]
     );
     res.json({ ok: true, deleted: rowCount });
   } catch (err) {

@@ -10,6 +10,39 @@ router.get('/', async (req, res) => {
     const startDate = `${year}-${mon}-01`;
     const lastDay   = new Date(parseInt(year), parseInt(mon), 0).getDate();
     const endDate   = `${year}-${mon}-${String(lastDay).padStart(2, '0')}`;
+    const isCurrentMonth = month === new Date().toISOString().slice(0, 7);
+
+    // Auto-create expense transactions for active debts (current month only, no duplicates)
+    if (isCurrentMonth) {
+      const { rows: activeDebts } = await query(
+        `SELECT * FROM debts WHERE total_amount > paid_amount AND due_day IS NOT NULL`
+      );
+      if (activeDebts.length > 0) {
+        let { rows: [divCat] } = await query(`SELECT id FROM categories WHERE name = 'Dívidas' LIMIT 1`);
+        if (!divCat) {
+          const { rows: [newCat] } = await query(
+            `INSERT INTO categories (name, color, icon) VALUES ('Dívidas', '#dc2626', 'landmark') RETURNING id`
+          );
+          divCat = newCat;
+        }
+        for (const debt of activeDebts) {
+          const autoDesc = `${debt.name} (parcela)`;
+          const { rows: [existing] } = await query(
+            `SELECT id FROM transactions WHERE origin = 'auto' AND description = ? AND date >= ? AND date <= ?`,
+            [autoDesc, startDate, endDate]
+          );
+          if (!existing) {
+            const txDay  = Math.min(debt.due_day, lastDay);
+            const txDate = `${year}-${mon}-${String(txDay).padStart(2, '0')}`;
+            await query(
+              `INSERT INTO transactions (description, amount, date, type, category_id, origin, owner)
+               VALUES (?, ?, ?, 'expense', ?, 'auto', ?)`,
+              [autoDesc, debt.monthly_payment, txDate, divCat.id, debt.owner || null]
+            );
+          }
+        }
+      }
+    }
 
     const [
       { rows: [incomeRow]  },
@@ -18,6 +51,7 @@ router.get('/', async (req, res) => {
       { rows: [monthlyDebtRow] },
       { rows: [subRow]     },
       { rows: [billsRow]   },
+      { rows: [txCountRow] },
     ] = await Promise.all([
       query(`SELECT COALESCE(SUM(amount),0) as total FROM transactions WHERE type='income'  AND date BETWEEN ? AND ?`, [startDate, endDate]),
       query(`SELECT COALESCE(SUM(amount),0) as total FROM transactions WHERE type='expense' AND date BETWEEN ? AND ?`, [startDate, endDate]),
@@ -25,6 +59,7 @@ router.get('/', async (req, res) => {
       query(`SELECT COALESCE(SUM(monthly_payment),0) as total FROM debts WHERE total_amount > paid_amount`),
       query(`SELECT COALESCE(SUM(amount),0) as total FROM subscriptions WHERE active=true`),
       query(`SELECT COALESCE(SUM(amount),0) as total FROM bills WHERE active=true`),
+      query(`SELECT COUNT(*)::int as count FROM transactions WHERE type='expense' AND date BETWEEN ? AND ?`, [startDate, endDate]),
     ]);
 
     const income     = incomeRow.total;
@@ -77,24 +112,6 @@ router.get('/', async (req, res) => {
       ORDER BY t.date DESC, t.created_at DESC LIMIT 10
     `, [startDate, endDate]);
 
-    // Monthly evolution (last 6 months)
-    const monthlyEvolution = [];
-    for (let i = 5; i >= 0; i--) {
-      const d = new Date(parseInt(year), parseInt(mon) - 1 - i, 1);
-      const y = d.getFullYear();
-      const m = String(d.getMonth() + 1).padStart(2, '0');
-      const ld = new Date(y, d.getMonth() + 1, 0).getDate();
-      const s = `${y}-${m}-01`, e = `${y}-${m}-${String(ld).padStart(2, '0')}`;
-      const monthLabel = d.toLocaleString('pt-BR', { month: 'short' });
-      const { rows: [ev] } = await query(`
-        SELECT
-          COALESCE(SUM(CASE WHEN type='income'  THEN amount ELSE 0 END),0) as income,
-          COALESCE(SUM(CASE WHEN type='expense' THEN amount ELSE 0 END),0) as expense
-        FROM transactions WHERE date BETWEEN ? AND ?
-      `, [s, e]);
-      monthlyEvolution.push({ month: monthLabel, income: ev.income, expense: ev.expense });
-    }
-
     // Owner summary
     const ownerSummary = {};
     for (const owner of ['luan', 'barbara']) {
@@ -130,25 +147,6 @@ router.get('/', async (req, res) => {
         prevBalance:         oPrevIncome.t - oPrevExpense.t,
         debtTotal:           oDebt.t,
       };
-    }
-
-    // Debt evolution (last 6 months, reconstructed from payment history)
-    const currentDebtTotal = debtRow.total;
-    const debtEvolution = [];
-    for (let i = 5; i >= 0; i--) {
-      const d = new Date(parseInt(year), parseInt(mon) - 1 - i, 1);
-      const y = d.getFullYear();
-      const m = String(d.getMonth() + 1).padStart(2, '0');
-      const monthEnd   = `${y}-${m}-${String(new Date(y, d.getMonth() + 1, 0).getDate()).padStart(2, '0')}`;
-      const monthLabel = d.toLocaleString('pt-BR', { month: 'short' });
-      const { rows: [paidAfterRow] } = await query(
-        `SELECT COALESCE(SUM(amount),0) as total FROM debt_payments WHERE date > ?`,
-        [monthEnd]
-      );
-      debtEvolution.push({
-        month:   monthLabel,
-        balance: Math.max(0, currentDebtTotal + paidAfterRow.total),
-      });
     }
 
     // Active installment purchases (uses installment_current/total columns)
@@ -204,11 +202,6 @@ router.get('/', async (req, res) => {
       installmentSummary.reduce((s, g) => s + g.monthlyAmount, 0).toFixed(2)
     );
 
-    // Upcoming goals (top 3, sorted by deadline)
-    const { rows: upcomingGoals } = await query(`
-      SELECT * FROM goals WHERE current_amount < target_amount ORDER BY deadline ASC LIMIT 3
-    `);
-
     // Spending per card for current month
     const { rows: cardSpending } = await query(`
       SELECT ca.id, ca.name, ca.color, ca.type,
@@ -239,15 +232,13 @@ router.get('/', async (req, res) => {
       billsTotal,
       surplus:           income - totalCommitted,
       healthPercent,
+      expenseCount:      txCountRow.count,
       prevMonthIncome:   prevIncomeRow.total,
       prevMonthExpense:  prevExpenseRow.total,
       prevCategoryBreakdown,
       categoryBreakdown,
       recentTransactions,
-      monthlyEvolution,
       ownerSummary,
-      upcomingGoals,
-      debtEvolution,
       installmentSummary,
       totalMonthlyInstallments,
       cardSpending,

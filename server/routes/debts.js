@@ -4,10 +4,13 @@ const { query } = require('../db/database-pg');
 
 router.get('/', async (req, res) => {
   try {
-    const { owner } = req.query;
-    let sql = `SELECT * FROM debts`;
+    const { owner, active } = req.query;
+    const conditions = [];
     const params = [];
-    if (owner) { sql += ` WHERE owner = ?`; params.push(owner); }
+    if (owner) { conditions.push('owner = ?'); params.push(owner); }
+    if (active === 'true') { conditions.push('total_amount > paid_amount'); }
+    let sql = `SELECT * FROM debts`;
+    if (conditions.length) sql += ` WHERE ${conditions.join(' AND ')}`;
     sql += ` ORDER BY created_at DESC`;
     const { rows } = await query(sql, params);
     res.json(rows);
